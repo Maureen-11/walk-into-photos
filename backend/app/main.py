@@ -4,12 +4,14 @@ import hashlib
 import secrets
 import shutil
 import uuid
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Cookie, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from app.config import settings
@@ -76,7 +78,19 @@ async def analyze(file: UploadFile = File(...), walk_session: str | None = Cooki
         raise HTTPException(status_code=413, detail="图片不能超过10MB")
     upload_id = uuid.uuid4().hex
     safe_path = settings.uploads_dir / f"{upload_id}{suffix}"
-    safe_path.write_bytes(content)
+    # Decode and re-encode so corrupt files are rejected and EXIF metadata is not
+    # carried into the model request or generated scene.
+    try:
+        with Image.open(BytesIO(content)) as image:
+            image.load()
+            image_format = image.format or suffix.removeprefix(".").upper()
+            normalized = image.convert("RGBA" if "A" in image.getbands() and image_format in {"PNG", "WEBP"} else "RGB")
+            save_kwargs = {"exif": b""}
+            if image_format in {"JPEG", "WEBP"}:
+                save_kwargs["quality"] = 92
+            normalized.save(safe_path, format=image_format, **save_kwargs)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="图片文件损坏或无法读取") from exc
     try:
         plan = await analyze_photo(safe_path, settings)
         analyses[plan.analysis_id] = {"plan": plan, "path": safe_path, "filename": file.filename}
@@ -96,6 +110,9 @@ def create_job(payload: CreateJobRequest, walk_session: str | None = Cookie(defa
     record = analyses.get(payload.analysis_id)
     if not record:
         raise HTTPException(status_code=404, detail="分析结果不存在或已过期")
+    existing = next((job for job in jobs.values() if job.analysis_id == payload.analysis_id), None)
+    if existing:
+        return existing
     if len([j for j in jobs.values() if j.state in {JobState.queued, JobState.generating}]) >= 1:
         raise HTTPException(status_code=429, detail="当前已有生成任务，请稍后再试")
     plan = record["plan"]

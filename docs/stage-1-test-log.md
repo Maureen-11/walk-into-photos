@@ -29,5 +29,6 @@
 - 演示 GLB：608 字节，GLB 2.0 头校验通过。
 - 纹理 GLB：使用临时有效 PNG 生成 1156 字节 GLB，JSON 中包含 image/texture 记录。
 - 前端：Vite production build 通过。
+- 输入安全：损坏图片返回400；上传内容会先解码并重新编码以去除EXIF；重复提交同一分析结果返回同一任务。
 
 以上是工程和演示模式验证，不等同于真实 DeepSeek 或 MoGe 测试。真实6张照片结果待补充。
