@@ -27,6 +27,7 @@
 - GPU：检测到 NVIDIA GeForce RTX 4050 Laptop GPU，6141 MiB 显存，驱动 566.07。
 - 演示闭环：邀请码、上传、分析、生成任务、manifest、GLB 下载通过。
 - 演示 GLB：608 字节，GLB 2.0 头校验通过。
+- 纹理 GLB：使用临时有效 PNG 生成 1156 字节 GLB，JSON 中包含 image/texture 记录。
 - 前端：Vite production build 通过。
 
 以上是工程和演示模式验证，不等同于真实 DeepSeek 或 MoGe 测试。真实6张照片结果待补充。
