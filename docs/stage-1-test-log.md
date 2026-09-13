@@ -20,3 +20,13 @@
 - 单张生成不超过180秒；
 - 浏览器能够加载 GLB；
 - 失败原因和回退路径有记录。
+
+## 当前验证（2026-09-13）
+
+- Python：语法检查通过。
+- GPU：检测到 NVIDIA GeForce RTX 4050 Laptop GPU，6141 MiB 显存，驱动 566.07。
+- 演示闭环：邀请码、上传、分析、生成任务、manifest、GLB 下载通过。
+- 演示 GLB：608 字节，GLB 2.0 头校验通过。
+- 前端：Vite production build 通过。
+
+以上是工程和演示模式验证，不等同于真实 DeepSeek 或 MoGe 测试。真实6张照片结果待补充。

@@ -114,7 +114,7 @@ def _run_job(job: Job, record: dict) -> Job:
     scene_id = uuid.uuid4().hex
     scene_path = settings.scenes_dir / scene_id / "scene.glb"
     try:
-        result = generate_scene(record["path"], scene_path, mock=settings.mock_geometry)
+        result = generate_scene(record["path"], scene_path, mock=settings.mock_geometry, settings=settings)
         job.state = JobState.validating
         job.progress = 85
         job.message = "正在检查场景"

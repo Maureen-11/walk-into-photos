@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import shutil
 import struct
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
+
+from PIL import Image
+
+from app.config import Settings
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
@@ -41,9 +49,49 @@ def write_demo_glb(path: Path) -> None:
     path.write_bytes(blob)
 
 
-def generate_scene(image_path: Path, scene_path: Path, mock: bool = True) -> dict:
+def _mask_coverage(output_dir: Path) -> float:
+    masks = list(output_dir.glob("*mask*.png"))
+    if not masks:
+        return 0.9
+    with Image.open(masks[0]).convert("L") as mask:
+        pixels = list(mask.getdata())
+    return sum(value > 8 for value in pixels) / max(1, len(pixels))
+
+
+def run_moge(image_path: Path, scene_path: Path, settings: Settings) -> dict:
+    """Run the official MoGe v2 CLI and copy its GLB into the job directory."""
+    scene_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="walk-moge-") as temp:
+        output_dir = Path(temp) / "output"
+        command = [
+            sys.executable, "-m", "moge.scripts.infer",
+            "-i", str(image_path), "-o", str(output_dir),
+            "--version", settings.moge_version,
+            "--pretrained", settings.moge_pretrained,
+            "--device", "cuda", "--fp16", "--resize", str(settings.moge_resize),
+            "--glb", "--maps",
+        ]
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=180)
+        if completed.returncode != 0:
+            message = (completed.stderr or completed.stdout)[-500:]
+            raise RuntimeError(f"MoGe inference failed: {message}")
+        glbs = list(output_dir.rglob("*.glb"))
+        if not glbs:
+            raise RuntimeError("MoGe completed without a GLB output")
+        shutil.copyfile(glbs[0], scene_path)
+        return {
+            "coverage": _mask_coverage(output_dir),
+            "movement_radius": 0.55,
+            "generated_region_note": "照片不可见区域由MoGe几何估计补全，不代表真实空间重建。",
+            "mock": False,
+        }
+
+
+def generate_scene(image_path: Path, scene_path: Path, mock: bool = True, settings: Settings | None = None) -> dict:
     if not mock:
-        raise NotImplementedError("MoGe adapter is the next model-backed implementation stage")
+        if settings is None:
+            raise ValueError("settings is required for MoGe inference")
+        return run_moge(image_path, scene_path, settings)
     scene_path.parent.mkdir(parents=True, exist_ok=True)
     write_demo_glb(scene_path)
     return {
