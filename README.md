@@ -23,6 +23,9 @@
 - [协作与分工](docs/collaboration.md)：两人如何讨论、认领任务和提交反馈。
 - [决策记录](docs/decisions.md)：已经确认的选择、暂定假设和仍未决定的事项。
 - [反馈模板](docs/feedback-template.md)：队友或队友的 AI 用来提交独立意见的模板。
+- [场景包接口契约](docs/io-contract.md)：提案。模型侧与展示侧之间约定的中间产物格式。
+- [第三方许可证登记](docs/licenses.md)：已核实的许可证结论与可用边界。
+- [参考项目清单](docs/reference-projects.md)：同类开源项目的分层清单与可借鉴之处。
 
 ## 项目原则
 
