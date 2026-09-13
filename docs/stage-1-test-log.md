@@ -32,3 +32,16 @@
 - 输入安全：损坏图片返回400；上传内容会先解码并重新编码以去除EXIF；重复提交同一分析结果返回同一任务。
 
 以上是工程和演示模式验证，不等同于真实 DeepSeek 或 MoGe 测试。真实6张照片结果待补充。
+
+## 六张照片演示模式批量结果
+
+| 文件 | 上传/分析 | 任务 | GLB大小 |
+| --- | ---: | --- | ---: |
+| corridor/corridor-01.jpg | 200 | READY | 18,772 B |
+| corridor/corridor-02.jpg | 200 | READY | 90,444 B |
+| corridor/corridor-03.jpg | 200 | READY | 43,108 B |
+| room/room-01.jpg | 200 | READY | 103,080 B |
+| room/room-02.jpg | 200 | READY | 80,908 B |
+| room/room-03.jpg | 200 | READY | 51,856 B |
+
+这些结果证明上传、图片重编码、演示分析、纹理GLB交付链对6张文件均可运行；不代表真实模型质量。
