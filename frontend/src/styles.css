@@ -32,6 +32,11 @@ li { color: #c7c3dc; margin: 8px 0; }
 .notice { color: #f2db9e; font-size: .9rem; }
 .progress { height: 8px; margin: 18px 0 4px; border-radius: 999px; background: #111327; overflow: hidden; }
 .progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7ff1e3, #9386ff); transition: width .3s; }
+.scene-viewer { position: relative; height: 420px; margin: 20px 0 4px; overflow: hidden; border: 1px solid #48456c; border-radius: 14px; background: #15152b; cursor: grab; touch-action: none; }
+.scene-viewer:active { cursor: grabbing; }
+.scene-viewer canvas { display: block; }
+.viewer-help { position: absolute; right: 12px; bottom: 10px; padding: 7px 10px; border-radius: 8px; background: rgba(10, 10, 25, .7); color: #e0ddf4; font-size: .78rem; pointer-events: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .error { color: #ffb4b4; }
 .global { margin: 18px 0; }
 footer { margin-top: 28px; color: #8f8ba9; font-size: .85rem; line-height: 1.6; }
