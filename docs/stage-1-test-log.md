@@ -45,3 +45,18 @@
 | room/room-03.jpg | 200 | READY | 51,856 B |
 
 这些结果证明上传、图片重编码、演示分析、纹理GLB交付链对6张文件均可运行；不代表真实模型质量。
+
+## DeepSeek Vision 真实分析结果
+
+模型：`deepseek-v4-flash-vision-exp`。以下为真实 API 输出的结构化字段摘要，不包含照片内容或 Key。
+
+| 文件 | 请求 | 适用性 | 场景 | 推荐预设 | 警告数 | 演示模式 |
+| --- | ---: | --- | --- | --- | ---: | --- |
+| corridor/corridor-01.jpg | 200 | suitable | corridor | corridor_forward | 4 | false |
+| corridor/corridor-02.jpg | 200 | suitable | corridor | corridor_forward | 6 | false |
+| corridor/corridor-03.jpg | 200 | suitable | corridor | corridor_forward | 4 | false |
+| room/room-01.jpg | 200 | conditional | room | room_explore | 4 | false |
+| room/room-02.jpg | 200 | conditional | room | room_explore | 5 | false |
+| room/room-03.jpg | 200 | conditional | room | room_explore | 5 | false |
+
+初步结论：6张照片均获得有效 JSON；模型能稳定区分走廊/房间并选择不同体验预设。当前样本没有触发 reject，因此还需要补充明显不适合的图片测试拒绝流程。以上只验证视觉规划，不代表 MoGe 几何质量。

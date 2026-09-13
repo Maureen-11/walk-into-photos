@@ -15,11 +15,13 @@
 - Python 语法检查、后端演示闭环、GLB 头校验、Vite production build 均通过。
 - 已验证损坏图片拒绝、EXIF清理路径和重复任务幂等。
 - 6张用户授权测试照片均通过演示模式上传、分析、生成和GLB交付。
+- 6张用户授权测试照片均通过真实 DeepSeek Vision 分析；走廊统一得到 corridor_forward，房间统一得到 room_explore。
 
 ## 尚未完成
 
 - 尚未使用用户提供的6张真实照片测试MoGe。
 - 已读取6张真实照片，但尚未让MoGe对它们做推理。
+- 仍缺少 reject 样本，以验证不适合照片的拒绝提示。
 - 尚未验证RTX 4050上的真实模型显存、耗时和生成质量。
 - 尚未部署GitHub Pages或临时实时演示入口。
 - 尚未推送到用户的GitHub远端仓库。
