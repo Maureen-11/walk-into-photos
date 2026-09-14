@@ -1,47 +1,17 @@
-# 走进照片
+# 走进照片 · 源码交接版
 
-“走进照片”是面向普通创作者的空间内容创作原型：用户上传一张横向走廊或房间照片，AI 自动判断照片是否适合生成，并推荐一种有限范围的浏览方式；用户确认后，系统生成可在浏览器中探索的场景，并提供分享链接和 GLB 下载。
+普通用户上传照片，由 AI 推荐体验，确认后生成浏览器内容。场景类希望能前进、绕行、回头；主体类希望通过鼠标或点击获得局部回应。
 
-> 当前状态：阶段 0/1 工程骨架。默认使用演示模式，尚未宣称 MoGe 或 DeepSeek 已在本机真实跑通。
+当前为未完成的实验原型：上传、任务保存、本地模型适配与 GLB 管线已有实现，核心几何和动作效果尚未通过验收。
 
-## 产品边界
+## 从这里开始
 
-第一版只做电脑网页、单张 JPEG/PNG/WebP、键盘/鼠标探索、邀请码访问和 24 小时场景保留。手机、手势、多照片、音乐、录音、热点讲解和电影画面留待后续。
+- [HANDOFF：统一交接入口](HANDOFF.md) — 启动、任务状态、交付边界。
+- [给接手者的项目说明](docs/handoff/PROJECT_BRIEF_ZH.md) — 目标、想法、现状、总体任务和前瞻。
+- [给新电脑 Codex 的上下文](docs/handoff/CODEX_HANDOVER.md) — 工程地图、问题和第一项可执行任务。
+- [AI 协作与 Prompt 实例](docs/handoff/AI_COLLABORATION_PLAYBOOK_ZH.md) — 真实原话、解释、可复制模板。
+- [交接验证说明](docs/handoff/VERIFICATION.md)。
 
-## 目录
+在本地解压后，请双击 `OPEN-HANDOFF.html` 阅读全部交接资料；普通浏览器不能直接解析 Markdown 文件之间的相对链接。
 
-```text
-backend/       FastAPI 服务、分析适配器、几何生成适配器
-frontend/      Vite + React + TypeScript 客户端
-docs/          项目决策、路线和测试记录
-```
-
-## 本地启动（骨架）
-
-```powershell
-# 后端
-cd backend
-& $env:PYTHON_EXE -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
-& .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-
-# 前端（另一个终端）
-cd frontend
-pnpm install
-pnpm dev
-```
-
-如果没有设置 `DEEPSEEK_API_KEY`，后端会明确显示演示模式，而不是把演示结果伪装成真实 AI 判断。
-
-## 已核验参考
-
-- 比赛官网：https://aichallenge.msup.com.cn/
-- MoGe：https://github.com/microsoft/MoGe
-- MoGe-2 Small：https://huggingface.co/Ruicheng/moge-2-vits-normal
-- Depth Anything V2：https://github.com/DepthAnything/Depth-Anything-V2
-- DeepSeek Vision：https://api-docs.deepseek.com/guides/vision/
-
-## 当前限制
-
-模型权重、真实照片、`.env`、上传文件和生成场景不进入仓库。阶段 1 的通过条件必须依靠真实测试记录，而不是代码存在本身。
+旧计划与报告按需查阅，历史“通过”仅限具体子项。工程包不含私人照片、模型权重、虚拟环境、数据库或真实 .env。首次接手按 HANDOFF 运行演示，再准备真实模型。

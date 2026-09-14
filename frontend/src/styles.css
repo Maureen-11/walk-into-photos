@@ -20,11 +20,19 @@ button, .button { display: inline-flex; align-items: center; justify-content: ce
 button:disabled { opacity: .5; cursor: wait; }
 .ghost { color: #c8c4e5; background: transparent; border: 1px solid #555174; }
 .drop { min-height: 270px; border: 1px dashed #5d5a84; border-radius: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; text-align: center; color: #aaa6c4; overflow: hidden; cursor: pointer; }
+.drop:hover { border-color: #7ff1e3; background: rgba(127, 241, 227, .05); }
 .drop input { display: none; }
 .drop img { width: 100%; height: 270px; object-fit: cover; }
 .drop strong { color: #fff; font-size: 1.2rem; }
 .upload > button { width: 100%; margin-top: 16px; }
 .pill.reject { color: #ffb4b4; border-color: #a45662; }
+.field { display: grid; gap: 8px; color: #c7c3dc; margin-top: 16px; }
+select { border: 1px solid #514e75; border-radius: 10px; padding: 11px 12px; background: #12142a; color: #fff; }
+.reason { color: #95e9e2; font-size: .92rem; }
+.mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.mode { display: grid; gap: 5px; min-height: 72px; padding: 10px; color: #c8c4e5; background: #171832; border: 1px solid #454267; text-align: left; font-size: .85rem; }
+.mode small { color: #9691b4; font-size: .72rem; font-weight: 400; }
+.mode.selected { border-color: #7ff1e3; background: #15333b; color: #fff; }
 li { color: #c7c3dc; margin: 8px 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .muted { min-height: 180px; display: grid; place-items: center; text-align: center; }
@@ -33,11 +41,21 @@ li { color: #c7c3dc; margin: 8px 0; }
 .progress { height: 8px; margin: 18px 0 4px; border-radius: 999px; background: #111327; overflow: hidden; }
 .progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7ff1e3, #9386ff); transition: width .3s; }
 .scene-viewer { position: relative; height: 420px; margin: 20px 0 4px; overflow: hidden; border: 1px solid #48456c; border-radius: 14px; background: #15152b; cursor: grab; touch-action: none; }
+.subject-viewer { position: relative; min-height: 420px; margin: 20px 0 4px; overflow: hidden; border: 1px solid #48456c; border-radius: 14px; background: #15152b; }
+.subject-viewer > img { display: block; width: 100%; height: 420px; object-fit: contain; background: #101022; }
+.subject-region { position: absolute; border: 1px dashed rgba(127,241,227,.8); pointer-events: none; }
+.subject-action-video { position: absolute; inset: 0; width: 100%; height: 420px; object-fit: contain; pointer-events: none; }
+.subject-controls { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(15,15,35,.88); }
+.subject-controls p { flex-basis: 100%; margin: 0; color: #d7d3ee; }
+.capability-box { margin: 12px 0; padding: 10px 12px; border: 1px solid #4d5b87; border-radius: 10px; background: rgba(40,41,76,.42); }
+.capability-box p { margin: 6px 0 0; }
 .scene-viewer:active { cursor: grabbing; }
 .scene-viewer canvas { display: block; }
 .viewer-help { position: absolute; right: 12px; bottom: 10px; padding: 7px 10px; border-radius: 8px; background: rgba(10, 10, 25, .7); color: #e0ddf4; font-size: .78rem; pointer-events: none; }
+.viewer-tag { position: absolute; left: 12px; top: 10px; padding: 6px 9px; border-radius: 8px; background: rgba(10, 10, 25, .65); color: #bffcf5; font-size: .75rem; pointer-events: none; }
+.viewer-debug { position: absolute; left: 12px; bottom: 10px; padding: 6px 9px; border-radius: 8px; background: rgba(10, 10, 25, .78); color: #f4e9a7; font-size: .72rem; pointer-events: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .error { color: #ffb4b4; }
 .global { margin: 18px 0; }
 footer { margin-top: 28px; color: #8f8ba9; font-size: .85rem; line-height: 1.6; }
-@media (max-width: 760px) { .shell { width: min(100% - 24px, 600px); padding-top: 28px; } header { flex-direction: column; } .grid { grid-template-columns: 1fr; } .badge { align-self: flex-start; } }
+@media (max-width: 760px) { .shell { width: min(100% - 24px, 600px); padding-top: 28px; } header { flex-direction: column; } .grid { grid-template-columns: 1fr; } .badge { align-self: flex-start; } .mode-grid { grid-template-columns: 1fr; } }
