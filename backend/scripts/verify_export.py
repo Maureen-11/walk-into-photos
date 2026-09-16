@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -24,7 +25,14 @@ def verify(package_path: Path) -> dict[str, object]:
             unexpected_source = "source.jpg" in names
             index = archive.read("index.html").decode("utf-8", errors="replace") if "index.html" in names else ""
             manifest = json.loads(archive.read("manifest.json")) if "manifest.json" in names else {}
-            has_remote_import = "https://" in index or "http://" in index
+            collision_resource = manifest.get("collision_resource")
+            collision_resource_present = not collision_resource or collision_resource in names
+            collision_resource_listed = not collision_resource or collision_resource in manifest.get("resource_manifest", [])
+            has_remote_import = bool(re.search(
+                r"(?im)^\s*import\b[^\n]*(?:https?:|from\s+['\"](?:https?:|\./))"
+                r"|\bfetch\(\s*['\"]https?:",
+                index,
+            ))
             return {
                 "package": package_path.name,
                 "bytes": package_path.stat().st_size,
@@ -34,7 +42,10 @@ def verify(package_path: Path) -> dict[str, object]:
                 "has_remote_import": has_remote_import,
                 "scene_id": manifest.get("scene_id"),
                 "template": manifest.get("template"),
-                "package_status": "failed" if missing or unexpected_source or has_remote_import else "needs_offline_run",
+                "collision_resource": collision_resource,
+                "collision_resource_present": collision_resource_present,
+                "collision_resource_listed": collision_resource_listed,
+                "package_status": "failed" if missing or unexpected_source or has_remote_import or not collision_resource_present or not collision_resource_listed else "needs_offline_run",
                 "interpretation": "包内容完整；仍需在另一台电脑断网双击打开并记录加载、移动和帧率。",
             }
     except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:

@@ -6,6 +6,7 @@ import mimetypes
 import struct
 import tempfile
 import gc
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +14,9 @@ from PIL import Image
 import trimesh
 
 from app.config import Settings
-from app.models import SceneTemplate
+from app.models import RegionConfirmation, SceneTemplate
+from app.services.coarse_scene import build_coarse_scene
+from app.services.photo_supported_scene import build_photo_supported_scene
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
@@ -324,7 +327,72 @@ def run_moge(
         return _run_moge_in_process(cli_input, scene_path, settings, version, world_scale_override=world_scale_override)
 
 
-def generate_scene(image_path: Path, scene_path: Path, mock: bool = True, settings: Settings | None = None, version: str = "quick", template: object | None = None, world_scale_override: float | None = None) -> dict:
+def generate_scene(
+    image_path: Path,
+    scene_path: Path,
+    mock: bool = True,
+    settings: Settings | None = None,
+    version: str = "quick",
+    template: object | None = None,
+    world_scale_override: float | None = None,
+    manual_regions: list[RegionConfirmation] | None = None,
+    quality_route: bool = True,
+) -> dict:
+    if isinstance(template, SceneTemplate):
+        selected_template = template
+    else:
+        try:
+            selected_template = SceneTemplate(str(template))
+        except (TypeError, ValueError):
+            selected_template = SceneTemplate.generic_layers
+    if not mock and settings is not None and settings.quality_scene_enabled and quality_route:
+        try:
+            quality_started = time.perf_counter()
+            moge_result = run_moge(
+                image_path,
+                scene_path,
+                settings,
+                version=version,
+                template=selected_template,
+                world_scale_override=world_scale_override,
+            )
+            moge_result["stage_timings_ms"] = {
+                "depth_and_camera": round((time.perf_counter() - quality_started) * 1000),
+            }
+            structure_started = time.perf_counter()
+            result = build_photo_supported_scene(
+                image_path,
+                scene_path,
+                selected_template,
+                moge_result,
+                settings,
+                manual_regions=manual_regions,
+            )
+            result["stage_timings_ms"] = {
+                **dict(moge_result.get("stage_timings_ms", {})),
+                "photo_supported_structure": round((time.perf_counter() - structure_started) * 1000),
+                "quality_total": round((time.perf_counter() - quality_started) * 1000),
+            }
+            return result
+        except Exception as exc:
+            # A model failure is recorded in the manifest instead of being
+            # silently presented as a successful reconstruction. The coarse
+            # route remains a usable, explicitly labelled fallback.
+            if settings.coarse_scene_enabled:
+                fallback = build_coarse_scene(
+                    image_path,
+                    scene_path,
+                    selected_template,
+                    mock=False,
+                    fallback_reason=f"quality_route_failed:{type(exc).__name__}",
+                )
+                fallback["quality_route_error"] = type(exc).__name__
+                fallback["stage_timings_ms"] = {"quality_route_attempt": round((time.perf_counter() - quality_started) * 1000)}
+                fallback["manual_assisted"] = bool(manual_regions)
+                return fallback
+            raise
+    if settings is not None and settings.coarse_scene_enabled:
+        return build_coarse_scene(image_path, scene_path, selected_template, mock=mock)
     if not mock:
         if settings is None:
             raise ValueError("settings is required for MoGe inference")

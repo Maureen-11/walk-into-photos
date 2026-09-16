@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { directionForYaw, resolveHorizontalMovement } from "./movement";
 
 type Template = string;
 type ExperienceKind = "spatial_scene" | "interactive_subject" | "still_fallback";
@@ -16,6 +17,7 @@ type Action = {
   hint?: string;
 };
 type SubjectRegion = { region_id: string; label: string; x?: number; y?: number; width?: number; height?: number; confidence?: number; occluded?: boolean };
+type RegionConfirmation = { region_id: string; role: "floor" | "wall" | "obstacle"; label: string; x: number; y: number; width: number; height: number };
 type Plan = {
   analysis_id: string;
   category: string;
@@ -45,16 +47,18 @@ type Job = {
   message: string;
   selected_template: Template;
   generation_mode: "quick" | "full" | "progressive";
+  quality_route?: boolean;
   quick_scene_id?: string;
   full_scene_id?: string;
   scene_id?: string;
   error?: string;
   validation_status?: "not_run" | "passed" | "failed" | "needs_review";
+  quality_status?: "unverified" | "needs_visual_review" | "failed" | string;
   stage_timings_ms?: Record<string, number>;
 };
-type Movement = { kind: string; start: number[]; bounds: Record<string, number[]>; walk_speed: number; fly_speed: number; allow_flight: boolean; ground_follow?: boolean; ground_y?: number; collision_radius?: number; route_checkpoints?: number[][] };
+type Movement = { kind: string; start: number[]; bounds: Record<string, number[]>; walk_speed: number; fly_speed: number; allow_flight: boolean; ground_follow?: boolean; ground_y?: number; collision_radius?: number; collision_boxes?: { box_id: string; bounds: { x?: number[]; z?: number[] }; label?: string }[]; route_checkpoints?: number[][] };
 type CameraSpec = { position: number[]; intrinsics?: number[][]; image_size?: number[]; camera_to_world?: number[][]; world_scale: number; near: number; far: number; fov_x?: number; fov_y?: number; coordinate_frame_id: string };
-type Manifest = { scene_id: string; scene_url: string; export_url: string; version: string; template: Template; engine?: string; movement: Movement; camera?: CameraSpec; source_url?: string; generated_region_note: string; mock: boolean; experience_kind?: ExperienceKind; actions?: Action[]; subject_regions?: SubjectRegion[]; capability_status?: Action["status"]; coverage?: number | null; quality_status?: string; quality_metrics?: Record<string, unknown> };
+type Manifest = { scene_id: string; scene_url: string; export_url: string; version: string; template: Template; engine?: string; movement: Movement; camera?: CameraSpec; source_url?: string; generated_region_note: string; mock: boolean; experience_kind?: ExperienceKind; actions?: Action[]; subject_regions?: SubjectRegion[]; capability_status?: Action["status"]; coverage?: number | null; quality_status?: string; quality_metrics?: Record<string, unknown>; input_sha256?: string; provider_version?: string; coordinate_frame_id?: string; resource_manifest?: string[]; collision_resource?: string; acceptance_evidence?: string[]; generation_source?: string; fallback_reason?: string; layout_version?: string; estimated_scale?: number; quality_route?: boolean; manual_assisted?: boolean; manual_region_sha256?: string; photo_supported_regions?: string[]; generated_regions?: string[] };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const apiUrl = (path: string) => path.startsWith("http://") || path.startsWith("https://") ? path : `${API_BASE_URL}${path}`;
@@ -66,7 +70,7 @@ const api = async (url: string, init?: RequestInit) => {
   return body;
 };
 
-function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { objectUrl: string; manifest: Manifest; lookRef: React.MutableRefObject<{ yaw: number; pitch: number }>; onReset: () => void; onPosition: (position: number[]) => void }) {
+function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, active }: { objectUrl: string; manifest: Manifest; lookRef: React.MutableRefObject<{ yaw: number; pitch: number }>; onReset: () => void; onPosition: (position: number[]) => void; active: boolean }) {
   const { scene } = useGLTF(objectUrl);
   const { camera } = useThree();
   const keys = useRef(new Set<string>());
@@ -100,11 +104,22 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
       const materials = Array.isArray(material) ? material : [material];
       for (const entry of materials) {
         entry.side = THREE.DoubleSide;
+        // Coarse GLBs are intentionally low-detail and can contain interior
+        // faces whose normal receives little direct light. A small emissive
+        // lift keeps the room readable without changing geometry or colour
+        // provenance.
+        if ("emissive" in entry && "color" in entry) {
+          const lit = entry as THREE.MeshStandardMaterial;
+          lit.emissive.copy(lit.color);
+          lit.emissiveIntensity = 0.07;
+        }
         entry.needsUpdate = true;
       }
     });
   }, [scene]);
   useEffect(() => {
+    const clearKeys = () => keys.current.clear();
+    if (!active) { clearKeys(); return; }
     const down = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       // These keys belong to the scene controller. In particular, Space has
@@ -112,9 +127,11 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
       // runs at the same time as the flight controller moves the camera.
       const sceneKeys = new Set([" ", "w", "a", "s", "d", "c", "f", "r", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
       if (sceneKeys.has(key)) event.preventDefault();
+      if (key === "f" && event.repeat) return;
       keys.current.add(key);
       if (key === "f" && movement.allow_flight) flying.current = !flying.current;
       if (key === "r") {
+        flying.current = false;
         camera.position.set(...(movement.start as [number, number, number]));
         lookRef.current = { yaw: 0, pitch: 0 };
         onReset();
@@ -125,7 +142,6 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
       if (key === " ") event.preventDefault();
       keys.current.delete(key);
     };
-    const clearKeys = () => keys.current.clear();
     window.addEventListener("keydown", down, { passive: false }); window.addEventListener("keyup", up, { passive: false });
     window.addEventListener("blur", clearKeys); document.addEventListener("visibilitychange", clearKeys);
     // Keep the user's position when a progressive full scene swaps in. A new
@@ -142,7 +158,7 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
       camera.updateProjectionMatrix();
     }
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", clearKeys); document.removeEventListener("visibilitychange", clearKeys); };
-  }, [camera, manifest.camera, movement, onReset]);
+  }, [active, camera, manifest.camera, movement, onReset]);
   useFrame((_, delta) => {
     const forward = Number(keys.current.has("w") || keys.current.has("arrowup")) - Number(keys.current.has("s") || keys.current.has("arrowdown"));
     const sideways = Number(keys.current.has("d") || keys.current.has("arrowright")) - Number(keys.current.has("a") || keys.current.has("arrowleft"));
@@ -150,8 +166,14 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
     const frameDelta = Math.min(Math.max(delta, 0), 0.05);
     const speed = (flying.current ? movement.fly_speed : movement.walk_speed) * frameDelta;
     const yaw = lookRef.current.yaw;
-    camera.position.x += Math.sin(yaw) * (forward / directionLength) * speed + Math.cos(yaw) * (sideways / directionLength) * speed;
-    camera.position.z += -Math.cos(yaw) * (forward / directionLength) * speed + Math.sin(yaw) * (sideways / directionLength) * speed;
+    const direction = directionForYaw(yaw, forward / directionLength, sideways / directionLength);
+    const resolved = resolveHorizontalMovement(
+      [camera.position.x, camera.position.y, camera.position.z],
+      { x: direction.x * speed, z: direction.z * speed },
+      movement,
+    );
+    camera.position.x = resolved[0];
+    camera.position.z = resolved[2];
     if (flying.current && movement.allow_flight) {
       const vertical = Number(keys.current.has(" ")) - Number(keys.current.has("c"));
       camera.position.y += vertical * speed;
@@ -204,29 +226,113 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition }: { o
 }
 
 function SubjectViewer({ preview, actions = [], regions = [] }: { preview: string; actions?: Action[]; regions?: SubjectRegion[] }) {
-  const [playing, setPlaying] = useState<Action>();
+  type Playback = { action: Action; state: "playing" | "cooldown" };
+  type SubjectPoint = { x: number; y: number };
+  const [playback, setPlayback] = useState<Playback>();
   const [message, setMessage] = useState("先观察原图；只有通过验收的动作素材才会播放。");
-  const timer = useRef<number>();
-  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  const [imageBox, setImageBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const cooldownTimer = useRef<number>();
+  const drag = useRef<{ action?: Action; start: SubjectPoint; last: SubjectPoint; moved: boolean }>();
+  const activeAction = playback?.action;
+  const activeRegion = (action: Action) => action.target_region_id ? regions.find((region) => region.region_id === action.target_region_id) : undefined;
+
+  const updateImageBox = useCallback(() => {
+    const image = imageRef.current;
+    const container = containerRef.current;
+    if (!image || !container || !image.naturalWidth || !image.naturalHeight) return;
+    const imageRect = image.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const scale = Math.min(imageRect.width / image.naturalWidth, imageRect.height / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    setImageBox({ left: imageRect.left - containerRect.left + (imageRect.width - width) / 2, top: imageRect.top - containerRect.top + (imageRect.height - height) / 2, width, height });
+  }, []);
+
+  useEffect(() => {
+    const update = () => window.requestAnimationFrame(updateImageBox);
+    window.addEventListener("resize", update);
+    update();
+    return () => window.removeEventListener("resize", update);
+  }, [preview, updateImageBox]);
+
+  useEffect(() => () => { if (cooldownTimer.current) window.clearTimeout(cooldownTimer.current); }, []);
+
+  function pointFromEvent(event: React.PointerEvent): SubjectPoint | undefined {
+    const image = imageRef.current;
+    if (!image || !image.naturalWidth || !image.naturalHeight) return undefined;
+    const rect = image.getBoundingClientRect();
+    const scale = Math.min(rect.width / image.naturalWidth, rect.height / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    const left = rect.left + (rect.width - width) / 2;
+    const top = rect.top + (rect.height - height) / 2;
+    const point = { x: (event.clientX - left) / width, y: (event.clientY - top) / height };
+    return point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1 ? point : undefined;
+  }
+
+  function inside(point: SubjectPoint | undefined, region: SubjectRegion | undefined) {
+    return Boolean(point && region?.x != null && region.y != null && region.width != null && region.height != null && point.x >= region.x && point.x <= region.x + region.width && point.y >= region.y && point.y <= region.y + region.height);
+  }
+
+  function finishPlayback(action: Action, nextMessage: string) {
+    if (playback?.action.action_id !== action.action_id || playback.state !== "playing") return;
+    setPlayback({ action, state: "cooldown" });
+    setMessage(nextMessage);
+    if (cooldownTimer.current) window.clearTimeout(cooldownTimer.current);
+    cooldownTimer.current = window.setTimeout(() => { setPlayback(undefined); setMessage("回到待机状态，可以再次尝试。"); }, Math.max(0, action.cooldown_ms));
+  }
+
+  function playbackError(action: Action) {
+    finishPlayback(action, "动作播放失败，已保留原图；可以稍后再次尝试。");
+  }
+
   function trigger(action: Action) {
     if (action.status !== "available" || !action.asset_url) {
       setMessage("这个动作素材尚未通过验收，已保留原图，不用静态抖动冒充回应。");
       return;
     }
-    if (playing) return;
-    setPlaying(action);
+    if (playback) return;
+    setPlayback({ action, state: "playing" });
     setMessage(action.hint || "动作播放中");
-    timer.current = window.setTimeout(() => { setPlaying(undefined); setMessage("回到待机状态，可以再次尝试。"); }, action.cooldown_ms);
   }
-  return <div className="subject-viewer">
-    <img src={preview} alt="主体原图" />
-    {regions.map((region) => region.x != null && region.y != null && region.width != null && region.height != null ? <span key={region.region_id} className="subject-region" style={{ left: `${region.x * 100}%`, top: `${region.y * 100}%`, width: `${region.width * 100}%`, height: `${region.height * 100}%` }} title={region.label} /> : null)}
-    {playing?.asset_url && <video className="subject-action-video" src={playing.asset_url} autoPlay muted playsInline onEnded={() => setPlaying(undefined)} />}
-    <div className="subject-controls"><p>{message}</p>{actions.length ? actions.map((action) => <button key={action.action_id} onClick={() => trigger(action)} disabled={Boolean(playing)}>{action.label}{action.status !== "available" ? "（素材待验收）" : ""}</button>) : <span className="muted">当前没有可执行动作。</span>}</div>
+
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (playback) return;
+    const point = pointFromEvent(event);
+    const action = actions.find((candidate) => candidate.trigger === "mouse_stroke" && candidate.status === "available" && Boolean(candidate.asset_url) && inside(point, activeRegion(candidate)));
+    drag.current = point ? { action, start: point, last: point, moved: false } : undefined;
+    if (point) { containerRef.current?.setPointerCapture(event.pointerId); }
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!drag.current) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    drag.current.moved = drag.current.moved || Math.hypot(point.x - drag.current.start.x, point.y - drag.current.start.y) >= 0.025;
+    drag.current.last = point;
+  }
+
+  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    drag.current = undefined;
+    if (!current?.action || !current.moved || !inside(current.last, activeRegion(current.action))) return;
+    trigger(current.action);
+    containerRef.current?.releasePointerCapture(event.pointerId);
+  }
+
+  return <div ref={containerRef} className="subject-viewer" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { drag.current = undefined; }}>
+    <img ref={imageRef} src={preview} alt="主体原图" onLoad={updateImageBox} />
+    {regions.map((region) => region.x != null && region.y != null && region.width != null && region.height != null && imageBox.width ? <span key={region.region_id} className="subject-region" style={{ left: `${imageBox.left + region.x * imageBox.width}px`, top: `${imageBox.top + region.y * imageBox.height}px`, width: `${region.width * imageBox.width}px`, height: `${region.height * imageBox.height}px` }} title={region.label} /> : null)}
+    {activeAction?.asset_url && playback?.state === "playing" && <video className="subject-action-video" style={{ left: `${imageBox.left}px`, top: `${imageBox.top}px`, width: `${imageBox.width}px`, height: `${imageBox.height}px` }} src={activeAction.asset_url} autoPlay muted playsInline onCanPlay={(event) => { event.currentTarget.play().catch(() => playbackError(activeAction)); }} onEnded={() => finishPlayback(activeAction, "动作播放结束，正在冷却。")} onError={() => playbackError(activeAction)} />}
+    <div className="subject-controls"><p>{message}</p>{actions.length ? actions.map((action) => action.trigger === "mouse_stroke" ? <span className="action-hint" key={action.action_id}>{action.label}：在目标框内拖动{action.status !== "available" ? "（素材待验收）" : ""}</span> : <button key={action.action_id} onClick={() => trigger(action)} disabled={Boolean(playback)}>{action.label}{action.status !== "available" ? "（素材待验收）" : ""}</button>) : <span className="muted">当前没有可执行动作。</span>}</div>
   </div>;
 }
 
 function SceneViewer({ objectUrl, manifest }: { objectUrl: string; manifest: Manifest }) {
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [look, setLook] = useState({ yaw: 0, pitch: 0 });
   const [position, setPosition] = useState(manifest.movement.start);
@@ -243,13 +349,13 @@ function SceneViewer({ objectUrl, manifest }: { objectUrl: string; manifest: Man
   const cameraSpec = manifest.camera;
   const initialCamera = cameraSpec ?? { position: manifest.movement.start, fov_y: 68, near: 0.01, far: 200 };
   const debug = new URLSearchParams(window.location.search).get("debug") === "1";
-  return <div className="scene-viewer" onPointerDown={(event) => { setDragging(true); last.current = { x: event.clientX, y: event.clientY }; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }} onPointerUp={() => setDragging(false)} onPointerLeave={() => setDragging(false)} onPointerMove={move}>
-    <Canvas camera={{ position: initialCamera.position as [number, number, number], fov: initialCamera.fov_y, near: initialCamera.near, far: initialCamera.far }} onCreated={({ scene }) => { scene.fog = cameraSpec ? null : new THREE.Fog("#15152b", 8, 40); }}>
-      <color attach="background" args={["#15152b"]} /><ambientLight intensity={1.6} /><directionalLight position={[4, 8, 4]} intensity={1.2} />
-      <Suspense fallback={null}><SceneContent objectUrl={objectUrl} manifest={manifest} lookRef={lookRef} onReset={resetLook} onPosition={reportPosition} /></Suspense>
+  return <div ref={viewerRef} className="scene-viewer" tabIndex={0} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onPointerDown={(event) => { viewerRef.current?.focus(); setFocused(true); setDragging(true); last.current = { x: event.clientX, y: event.clientY }; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }} onPointerUp={() => setDragging(false)} onPointerLeave={() => setDragging(false)} onPointerMove={move}>
+    <Canvas camera={{ position: initialCamera.position as [number, number, number], fov: initialCamera.fov_y, near: initialCamera.near, far: initialCamera.far }} onCreated={({ gl, scene }) => { gl.setClearColor("#263044", 1); scene.fog = cameraSpec ? null : new THREE.Fog("#15152b", 8, 40); }}>
+      <color attach="background" args={["#263044"]} /><hemisphereLight args={["#f8fbff", "#7d8798", 1.2]} /><ambientLight intensity={1.0} /><directionalLight position={[4, 8, 4]} intensity={1.2} />
+      <Suspense fallback={null}><SceneContent objectUrl={objectUrl} manifest={manifest} lookRef={lookRef} onReset={resetLook} onPosition={reportPosition} active={focused} /></Suspense>
     </Canvas>
     <div className="viewer-help">拖动360°环顾 · WASD移动 · R回到起点 · F飞行{manifest.movement.allow_flight ? " · 空格上升 · C下降" : ""}</div>
-    <div className="viewer-tag">{manifest.template} · {manifest.engine ?? "legacy"} · {manifest.version}</div>
+    <div className="viewer-tag">{manifest.template} · {manifest.generation_source ?? manifest.engine ?? "legacy"} · {manifest.version}</div>
     {debug && <div className="viewer-debug">位置 {position.map((value) => value.toFixed(2)).join(" / ")} · {cameraSpec ? `FOV ${cameraSpec.fov_x?.toFixed(1)}°/${cameraSpec.fov_y?.toFixed(1)}° · scale ${cameraSpec.world_scale.toFixed(4)}` : "旧场景协议"}</div>}
     <span className="sr-only">视角 {look.yaw.toFixed(2)} / {look.pitch.toFixed(2)} · 位置 {position.map((value) => value.toFixed(2)).join(" / ")}</span>
   </div>;
@@ -264,18 +370,26 @@ export default function App() {
   const [sceneObjectUrl, setSceneObjectUrl] = useState<string>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<Job["generation_mode"]>("progressive");
+  const [mode, setMode] = useState<Job["generation_mode"]>("quick");
   const [template, setTemplate] = useState<Template>();
+  const [assistMode, setAssistMode] = useState(false);
+  const [assistRole, setAssistRole] = useState<RegionConfirmation["role"]>("floor");
+  const [assistRegions, setAssistRegions] = useState<RegionConfirmation[]>([]);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   useEffect(() => {
     if (!job?.scene_id) { setSceneObjectUrl(undefined); setManifest(undefined); return; }
     const id = job.scene_id;
     setSceneObjectUrl(apiUrl(`/api/scenes/${id}/scene.glb`));
-    api(`/api/scenes/${id}/manifest`).then(setManifest).catch((e) => setError(e.message));
+    setManifest(undefined);
+    let cancelled = false;
+    api(`/api/scenes/${id}/manifest`).then((next) => {
+      if (!cancelled && next.scene_id === id) setManifest(next);
+    }).catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
   }, [job?.scene_id]);
   useEffect(() => {
-    if (!job?.job_id || job.state === "FULL_READY" || job.state === "FAILED" || job.state === "INTERRUPTED" || job.generation_mode === "quick" && job.state === "QUICK_READY") return;
+    if (!job?.job_id || job.state === "FULL_READY" || job.state === "FAILED" || job.state === "INTERRUPTED" || job.state === "CANCELLED" || job.state === "QUICK_READY" && (job.generation_mode === "quick" || Boolean(job.error))) return;
     const timer = window.setInterval(async () => { try { setJob(await api(`/api/jobs/${job.job_id}`)); } catch { /* keep last state */ } }, 1000);
     return () => window.clearInterval(timer);
   }, [job?.job_id, job?.state, job?.generation_mode]);
@@ -287,7 +401,7 @@ export default function App() {
 
   function choose(next: File | null) {
     if (preview) URL.revokeObjectURL(preview);
-    setFile(next); setPlan(undefined); setJob(undefined); setManifest(undefined); setError("");
+    setFile(next); setPlan(undefined); setJob(undefined); setManifest(undefined); setError(""); setAssistMode(false); setAssistRegions([]);
     if (next) setPreview(URL.createObjectURL(next)); else setPreview(undefined);
   }
   async function analyze() {
@@ -301,7 +415,7 @@ export default function App() {
     if (!plan) return;
     setBusy(true); setError("");
     try {
-      const created = await api("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysis_id: plan.analysis_id, selected_template: template || plan.recommended_template, generation_mode: mode }) });
+      const created = await api("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analysis_id: plan.analysis_id, selected_template: template || plan.recommended_template, generation_mode: mode, quality_route: true, region_confirmations: assistRegions }) });
       setJob(created);
     } catch (e) { setError(e instanceof Error ? e.message : "生成失败"); } finally { setBusy(false); }
   }
@@ -312,12 +426,34 @@ export default function App() {
     catch (e) { setError(e instanceof Error ? e.message : "重试失败"); }
     finally { setBusy(false); }
   }
+  function markRegion(event: React.MouseEvent<HTMLImageElement>) {
+    if (!assistMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 0.18;
+    const height = 0.18;
+    const centerX = (event.clientX - rect.left) / rect.width;
+    const centerY = (event.clientY - rect.top) / rect.height;
+    const x = Math.max(0, Math.min(1 - width, centerX - width / 2));
+    const y = Math.max(0, Math.min(1 - height, centerY - height / 2));
+    const index = assistRegions.length + 1;
+    setAssistRegions((current) => [...current, { region_id: `user_region_${index}`, role: assistRole, label: assistRole === "floor" ? "用户确认地面" : assistRole === "wall" ? "用户确认墙面" : "用户确认障碍", x, y, width, height }]);
+    setAssistMode(false);
+  }
+  async function cancel() {
+    if (!job) return;
+    setBusy(true); setError("");
+    try { setJob(await api(`/api/jobs/${job.job_id}/cancel`, { method: "POST" })); }
+    catch (e) { setError(e instanceof Error ? e.message : "取消失败"); }
+    finally { setBusy(false); }
+  }
 
-  return <main className="shell"><header><div><p className="eyebrow">WALK INTO PHOTOS · LUNA MVP</p><h1>把照片变成一段可以走进去的体验</h1><p className="sub">拖入一张照片，AI先判断适合的入画方式；你确认模板和质量模式后，再开始本地生成。</p></div><span className="badge">八类模板 · 本地优先</span></header>
+  return <main className="shell"><header><div><p className="eyebrow">WALK INTO PHOTOS · LUNA MVP</p><h1>把照片变成一段可以走进去的体验</h1><p className="sub">拖入一张照片，AI先判断路线；确认后恢复照片表面并补齐可行走的简化结构。</p></div><span className="badge">照片支持质量路线 · 本地优先</span></header>
     <section className="grid">
-      <div className="card upload"><h2>01 · 上传照片</h2><label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); choose(e.dataTransfer.files?.[0] ?? null); }}>{preview ? <img src={preview} alt="待分析照片" /> : <><strong>拖入照片，或点击选择</strong><span>支持 JPEG / PNG / WebP，最大10MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => choose(e.target.files?.[0] ?? null)} /></label>{file && !plan && <button disabled={busy} onClick={analyze}>{busy ? "本地AI正在分析…" : "让AI判断这张照片"}</button>}</div>
-      <div className="card plan"><h2>02 · AI规划与确认</h2>{plan ? <><span className="pill">{plan.experimental ? "通用实验模式" : plan.experience_kind === "interactive_subject" ? "主体互动候选" : "场景体验候选"}</span><h3>{plan.title}</h3><p>{plan.summary}</p><p className="reason">{plan.rationale}</p>{plan.actions?.length ? <div className="capability-box"><strong>建议操作</strong>{plan.actions.map((action) => <p key={action.action_id}>· {action.label}：{action.hint || "动作素材待验收"}</p>)}</div> : null}{plan.capability_notes?.map((note) => <p className="muted" key={note}>{note}</p>)}<label className="field">体验模板<select value={template || plan.recommended_template} onChange={(e) => setTemplate(e.target.value)}>{plan.compatible_templates.map((item) => <option key={item} value={item}>{item === plan.recommended_template ? `推荐 · ${item}` : item}</option>)}</select></label><div className="mode-grid">{(["quick", "full", "progressive"] as const).map((item) => <button key={item} className={mode === item ? "mode selected" : "mode"} onClick={() => setMode(item)}>{item === "quick" ? "快速体验" : item === "full" ? "完整体验" : "渐进体验（推荐）"}<small>{item === "quick" ? "目标3–5分钟，实际以设备计时为准" : item === "full" ? "目标≥10分钟，实际以设备计时为准" : "先玩快速版，再后台升级"}</small></button>)}</div><ul>{plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><div className="actions"><button disabled={busy} onClick={generate}>{busy ? "正在进入队列…" : "确认生成"}</button><button className="ghost" onClick={() => choose(null)}>更换照片</button></div></> : <p className="muted">上传后，本地AI会给出首选模板和可兼容的替代方案。</p>}</div>
+      <div className="card upload"><h2>01 · 上传照片</h2><label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); choose(e.dataTransfer.files?.[0] ?? null); }}>{preview ? <img className={assistMode ? "confirm-target" : ""} src={preview} alt="待分析照片" onClick={markRegion} /> : <><strong>拖入照片，或点击选择</strong><span>支持 JPEG / PNG / WebP，最大10MB</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => choose(e.target.files?.[0] ?? null)} /></label>{file && !plan && <button disabled={busy} onClick={analyze}>{busy ? "本地AI正在分析…" : "让AI判断这张照片"}</button>}{plan && <div className="assist-box"><p>可选区域确认：自动判断不可靠时，在照片上点一次确认地面、墙面或主要障碍；不确认也可直接生成。</p><div className="assist-row"><select value={assistRole} onChange={(e) => setAssistRole(e.target.value as RegionConfirmation["role"])}><option value="floor">地面</option><option value="wall">墙面／边界</option><option value="obstacle">主要障碍</option></select><button className="ghost" onClick={() => setAssistMode((current) => !current)}>{assistMode ? "请点击左侧照片" : "开始可选确认"}</button></div>{assistRegions.length ? <p className="muted-inline">已确认 {assistRegions.length} 个区域：{assistRegions.map((region) => region.label).join("、")}</p> : null}</div>}</div>
+      <div className="card plan"><h2>02 · AI规划与确认</h2>{plan ? <><span className="pill">{plan.experimental ? "备用：通用展示空间" : plan.experience_kind === "interactive_subject" ? "主体照片 · 空间化展示" : "照片支持质量路线"}</span><h3>{plan.title}</h3><p>{plan.summary}</p><p className="reason">{plan.rationale}</p>{plan.actions?.length ? <div className="capability-box"><strong>建议操作</strong>{plan.actions.map((action) => <p key={action.action_id}>· {action.label}：{action.hint || "动作素材待验收"}</p>)}</div> : null}{plan.capability_notes?.map((note) => <p className="muted" key={note}>{note}</p>)}<label className="field">体验模板<select value={template || plan.recommended_template} onChange={(e) => setTemplate(e.target.value)}>{plan.compatible_templates.map((item) => <option key={item} value={item}>{item === plan.recommended_template ? `推荐 · ${item}` : item}</option>)}</select></label><div className="mode-grid"><button className="mode selected" onClick={() => setMode("quick")}>生成质量场景<small>恢复照片表面，补齐可行走结构；复杂图片会更久</small></button></div><ul>{plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><div className="actions"><button disabled={busy} onClick={generate}>{busy ? "正在进入队列…" : "确认生成质量场景"}</button><button className="ghost" onClick={() => choose(null)}>更换照片</button></div></> : <p className="muted">上传后，本地AI会给出首选模板和可兼容的替代方案。</p>}</div>
     </section>
-    {job && <section className="card result"><div><h2>03 · 体验与交付</h2><p>{statusLabel} · 阶段 {job.progress}%</p>{job.stage_timings_ms && Object.keys(job.stage_timings_ms).length ? <p className="muted">实际生成耗时：{Object.entries(job.stage_timings_ms).map(([stage, ms]) => `${stage} ${(ms / 1000).toFixed(1)}秒`).join(" · ")}</p> : null}{job.validation_status !== "passed" && <p className="notice">质量验收：{job.validation_status === "failed" ? "未通过" : job.validation_status === "needs_review" ? "待复核" : "尚未验收"}。生成完成不等于质量通过。</p>}{job.state === "INTERRUPTED" && <p className="notice">任务因进程重启而中断；当前未提供断点续算，请保留这条记录并重新确认生成。</p>}{job.state === "QUICK_READY" && job.generation_mode === "progressive" && <p className="notice">快速版已经可以玩，完整版正在后台顺序生成。</p>}{job.state === "FULL_READY" && <p className="notice">完整版候选已完成；细节改善仍需对比质检，不能仅凭分辨率宣称完成。</p>}{manifest && <p className="notice">{manifest.generated_region_note}</p>}{manifest && <p className="muted">机器检查：{manifest.quality_status === "failed" ? "失败" : manifest.quality_status === "needs_visual_review" ? "通过基础结构检查，仍需视觉复核" : "未完成"}。{manifest.coverage == null ? "几何覆盖率未测量。" : `可见覆盖率 ${(manifest.coverage * 100).toFixed(1)}%。`}</p>}</div><div className="progress"><span style={{ width: `${job.progress}%` }} /></div>{job.scene_id && sceneObjectUrl && manifest && (manifest.experience_kind === "interactive_subject" && preview ? <SubjectViewer preview={preview} actions={manifest.actions} regions={manifest.subject_regions} /> : !manifest.mock && !manifest.camera ? <p className="notice">这是旧版本真实场景，没有新版相机协议，已停止展示。请重新上传照片并生成新版场景。</p> : <SceneViewer objectUrl={sceneObjectUrl} manifest={manifest} />)}<div className="actions">{job.state === "FAILED" || job.state === "INTERRUPTED" ? <button onClick={retry} disabled={busy}>重新生成</button> : null}{job.scene_id && <a className="button" href={apiUrl(`/api/scenes/${job.scene_id}/scene.glb`)} download>下载 GLB</a>}{job.scene_id && <a className="button" href={apiUrl(`/api/scenes/${job.scene_id}/export`)} download>导出当前包</a>}</div></section>}
+    {job && <section className="card result"><div><h2>03 · 体验与交付</h2><p>{statusLabel} · 阶段 {job.progress}%</p>{job.stage_timings_ms && Object.keys(job.stage_timings_ms).length ? <p className="muted">实际生成耗时：{Object.entries(job.stage_timings_ms).map(([stage, ms]) => `${stage} ${(ms / 1000).toFixed(1)}秒`).join(" · ")}</p> : null}{job.validation_status !== "passed" && <p className="notice">质量验收：{job.validation_status === "failed" ? "未通过" : job.validation_status === "needs_review" ? "待复核" : "尚未验收"}。生成完成不等于质量通过。</p>}{job.state === "INTERRUPTED" && <p className="notice">任务因进程重启而中断；当前未提供断点续算，请保留这条记录并重新确认生成。</p>}{job.state === "CANCELLED" && <p className="notice">任务已取消；已完成的快速结果仍可查看，完整版不会自动替换它。</p>}{job.state === "QUICK_READY" && job.generation_mode === "progressive" && !job.error && <p className="notice">快速版已经可以玩，完整版正在后台顺序生成。</p>}{job.error === "FULL_UPGRADE_NOT_PROMOTED" && <p className="notice">完整版候选已保留，但未通过安全升级条件；当前继续使用快速版。</p>}{job.error === "FULL_MACHINE_QUALITY_FAILED" && <p className="notice">完整版机器检查未通过；当前继续使用快速版，失败候选已保留供复核。</p>}{job.state === "FULL_READY" && <p className="notice">完整版候选已完成；仍需同一路线浏览器复核，不能仅凭分辨率宣称完成。</p>}{manifest && <p className="notice">{manifest.generated_region_note}</p>}{manifest && <p className="muted">机器检查：{manifest.quality_status === "failed" ? "失败" : manifest.quality_status === "needs_visual_review" ? "通过基础结构检查，仍需视觉复核" : "未完成"}。{manifest.coverage == null ? "几何覆盖率未测量。" : `可见覆盖率 ${(manifest.coverage * 100).toFixed(1)}%。`}</p>}</div><div className="progress"><span style={{ width: `${job.progress}%` }} /></div>{job.scene_id && sceneObjectUrl && manifest && (manifest.experience_kind === "interactive_subject" && preview ? <SubjectViewer key={manifest.scene_id} preview={preview} actions={manifest.actions} regions={manifest.subject_regions} /> : !manifest.mock && !manifest.camera ? <p className="notice">这是旧版本真实场景，没有新版相机协议，已停止展示。请重新上传照片并生成新版场景。</p> : <SceneViewer key={manifest.scene_id} objectUrl={sceneObjectUrl} manifest={manifest} />)}<div className="actions">{["QUEUED", "QUICK_GENERATING", "FULL_GENERATING"].includes(job.state) ? <button className="ghost" onClick={cancel} disabled={busy}>取消任务</button> : null}{job.state === "FAILED" || job.state === "INTERRUPTED" || job.state === "CANCELLED" ? <button onClick={retry} disabled={busy}>重新生成</button> : null}{job.scene_id && <a className="button" href={apiUrl(`/api/scenes/${job.scene_id}/scene.glb`)} download>下载 GLB</a>}{job.scene_id && <a className="button" href={apiUrl(`/api/scenes/${job.scene_id}/export`)} download>导出当前包</a>}</div></section>}
     {error && <p className="error global">{error}</p>}<footer>照片只在本机处理；不可见区域会标注为AI创作，不宣称真实空间复原。当前单GPU队列一次只运行一个模型任务。</footer></main>;
 }

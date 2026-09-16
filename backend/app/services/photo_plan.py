@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 import os
 import re
 import uuid
@@ -18,6 +19,9 @@ from app.models import (
     SubjectRegion,
 )
 from app.services.templates import CATEGORY_TEMPLATE, COMPATIBLE, TEMPLATE_LABELS
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 _ALIASES: dict[str, PhotoCategory] = {
@@ -59,7 +63,14 @@ def _parse_category(answer: str) -> PhotoCategory:
     return PhotoCategory.other
 
 
-def build_plan(category: PhotoCategory, description: str, backend: str = "local-rules", mock: bool = False, subject_regions: list[SubjectRegion] | None = None) -> PhotoPlan:
+def build_plan(
+    category: PhotoCategory,
+    description: str,
+    backend: str = "local-rules",
+    mock: bool = False,
+    subject_regions: list[SubjectRegion] | None = None,
+    delivery_coarse: bool = False,
+) -> PhotoPlan:
     template = CATEGORY_TEMPLATE[category]
     experimental = category is PhotoCategory.other
     warnings = ["照片不可见区域会使用程序化或AI补全，不代表真实空间复原。"]
@@ -106,6 +117,14 @@ def build_plan(category: PhotoCategory, description: str, backend: str = "local-
         warnings.insert(0, "内容无法准确归入八类模板，将使用通用分层实验模式；仍可继续生成。")
         experience_kind = ExperienceKind.still_fallback
         capability_status = CapabilityStatus.experimental
+    if delivery_coarse and experience_kind is ExperienceKind.interactive_subject:
+        # The deadline route guarantees a spatial coarse scene for every
+        # valid image. Subject actions remain available to the isolated P07
+        # mechanism tests but are deferred from this delivery path.
+        experience_kind = ExperienceKind.spatial_scene
+        capability_status = CapabilityStatus.unverified
+        actions = []
+        capability_notes.append("主体动作延期；本次交付提供带展示框的可行走自动粗模。")
     return PhotoPlan(
         analysis_id=uuid.uuid4().hex,
         category=category,
@@ -209,12 +228,12 @@ def analyze_photo(path: Path, settings: Settings) -> PhotoPlan:
     if settings.local_planner_enabled:
         try:
             category, description, regions = _query_moondream(path, settings)
-            return build_plan(category, description, backend="moondream2-local", mock=False, subject_regions=regions)
-        except Exception:
+            return build_plan(category, description, backend="moondream2-local", mock=False, subject_regions=regions, delivery_coarse=settings.coarse_scene_enabled)
+        except Exception as exc:
             # Local rules keep ordinary photos usable while the model is being
             # downloaded, unavailable offline, or unable to parse its answer.
-            pass
-    return build_plan(PhotoCategory.other, "本地视觉模型不可用，已切换到通用分层兜底。", backend="local-rules-fallback", mock=settings.mock_mode)
+            LOGGER.warning("local planner unavailable; using rules fallback (%s)", type(exc).__name__, exc_info=True)
+    return build_plan(PhotoCategory.other, "本地视觉模型不可用，已切换到通用分层兜底。", backend="local-rules-fallback", mock=settings.mock_mode, delivery_coarse=settings.coarse_scene_enabled)
 
 
 def demo_plan() -> PhotoPlan:

@@ -44,6 +44,12 @@ class Settings:
     moge_resize: int = int(os.getenv("MOGE_RESIZE", "1024"))
     moge_quick_resize: int = int(os.getenv("MOGE_QUICK_RESIZE", "768"))
     moge_full_resize: int = int(os.getenv("MOGE_FULL_RESIZE", "1280"))
+    # The deadline route uses a deterministic coarse scene so a valid upload
+    # always produces a walkable result when the quality route cannot run.
+    coarse_scene_enabled: bool = _truthy("COARSE_SCENE_ENABLED", True)
+    # Real runs use the photo-supported MoGe route by default. Demo/mock runs
+    # still use the deterministic coarse scene because no model is required.
+    quality_scene_enabled: bool = _truthy("QUALITY_SCENE_ENABLED", True)
     scene_ttl_hours: int = int(os.getenv("SCENE_TTL_HOURS", "24"))
     max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
     experimental_context_shell: bool = _truthy("EXPERIMENTAL_CONTEXT_SHELL", True)
