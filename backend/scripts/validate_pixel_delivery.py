@@ -34,7 +34,7 @@ def _scene_record(scene_dir: Path, archive: Path) -> dict[str, object]:
     missing = sorted(required - names)
     if bad_member is not None or missing:
         raise ValueError(f"invalid archive {archive}: bad={bad_member!r}, missing={missing}")
-    if manifest.style_route not in {"pixel_style_sample_v2", "pixel_style_sample_v3"}:
+    if manifest.style_route not in {"pixel_style_sample_v2", "pixel_style_sample_v3", "pixel_style_sample_v5"}:
         raise ValueError(f"unexpected style route: {manifest.style_route}")
     if not manifest.movement.collision_boxes:
         raise ValueError(f"no collision boxes: {scene_dir}")

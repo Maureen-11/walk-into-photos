@@ -755,3 +755,133 @@ def build_pixel_nature_v03(image_path: Path, output_dir: Path, scene_id: str = "
         version="pixel-v03",
         provider_version="pixel-voxel-v3",
     )
+
+
+PIXEL_V05_STREET_LAYOUT_VERSION = "pixel-street-v5-fine-detail"
+PIXEL_V05_BUILDING_LAYOUT_VERSION = "pixel-building-v5-fine-detail"
+
+
+def build_pixel_street_v05(image_path: Path, output_dir: Path, scene_id: str = "pixel-v05-s01") -> dict[str, object]:
+    """Build an external, walkable street candidate with separated proxies."""
+
+    image_path = image_path.resolve()
+    output_dir = output_dir.resolve()
+    palette = _palette(image_path)
+    roles = palette["roles"]
+    floor, wall, wood = roles["floor"], roles["wall"], roles["wood"]
+    metal, plant, window, dark = roles["metal"], roles["plant"], roles["window"], roles["dark"]
+    scene = trimesh.Scene()
+    objects: list[dict[str, object]] = []
+    collisions: list[CollisionBox] = []
+
+    _add_part(scene, objects, collisions, "pixel-v05-street-road", (12.00, 0.25, 24.00), (0.0, 0.0, -3.0), floor, "road", "photo_inferred_road_surface")
+    _add_part(scene, objects, [], "pixel-v05-street-sidewalk-left", (2.10, 0.32, 24.00), (-7.05, 0.16, -3.0), _mix(floor, wall, 0.22), "sidewalk", "photo_inferred_sidewalk")
+    _add_part(scene, objects, [], "pixel-v05-street-sidewalk-right", (2.10, 0.32, 24.00), (7.05, 0.16, -3.0), _mix(floor, wall, 0.16), "sidewalk", "photo_inferred_sidewalk")
+    for index, z in enumerate((7.0, 4.5, 2.0, -0.5, -3.0, -5.5, -8.0, -10.5, -13.0)):
+        _add_part(scene, objects, [], f"pixel-v05-street-lane-mark-{index}", (0.18, 0.04, 1.15), (0.0, 0.17, z), _mix(window, floor, 0.18), "road_detail", "photo_palette_upper", grid=DETAIL_VOXEL)
+
+    # Building masses stay on the sides; the route remains an outdoor street
+    # observation and does not promise entry into their unseen interiors.
+    for side, x, colour in (("left", -6.0, _mix(wall, dark, 0.20)), ("right", 6.0, _mix(wall, dark, 0.30))):
+        for index, z in enumerate((3.6, -2.0, -7.6)):
+            _add_part(scene, objects, collisions, f"pixel-v05-street-{side}-building-{index}", (1.65, 4.40 + index * 0.45, 4.20), (x, 2.20 + index * 0.225, z), colour, "building_mass", "photo_inferred_background_building", "街道边缘建筑体块")
+            for window_index, y in enumerate((1.55, 2.65, 3.75)):
+                _add_part(scene, objects, [], f"pixel-v05-street-{side}-window-{index}-{window_index}", (0.08, 0.52, 0.72), (x - (0.86 if side == "left" else -0.86), y, z), window, "building_detail", "photo_inferred_window_line", grid=DETAIL_VOXEL)
+
+    # Cars and trees are intentionally separate simplified entities so they
+    # cannot become a single ribbon across road, people and background.
+    for index, (x, z, colour) in enumerate(((-2.55, 1.2, wood), (2.65, -4.0, metal))):
+        _add_part(scene, objects, collisions, f"pixel-v05-street-car-{index}", (1.45, 0.62, 2.60), (x, 0.48, z), colour, "vehicle_proxy", "photo_inferred_vehicle", "车辆简化体积")
+        _add_part(scene, objects, [], f"pixel-v05-street-car-window-{index}", (1.10, 0.32, 0.72), (x, 0.88, z - 0.10), dark, "vehicle_detail", "procedural_completion", grid=DETAIL_VOXEL)
+        for wheel_index, wheel_x in enumerate((x - 0.58, x + 0.58)):
+            _add_part(scene, objects, [], f"pixel-v05-street-car-wheel-{index}-{wheel_index}", (0.16, 0.28, 0.34), (wheel_x, 0.25, z), dark, "vehicle_detail", "procedural_completion", grid=DETAIL_VOXEL)
+    for index, (x, z) in enumerate(((-4.35, 4.2), (4.25, -8.2), (-4.50, -11.0))):
+        _add_part(scene, objects, [], f"pixel-v05-street-tree-trunk-{index}", (0.22, 1.45, 0.22), (x, 0.82, z), wood, "tree_proxy", "photo_inferred_tree", grid=DETAIL_VOXEL)
+        _add_part(scene, objects, collisions, f"pixel-v05-street-tree-crown-{index}", (1.35, 1.25, 1.35), (x, 1.95, z), plant, "tree_proxy", "photo_inferred_tree", "树木简化体积")
+    for index, (x, z) in enumerate(((-1.0, -7.2), (1.1, -10.4))):
+        _add_part(scene, objects, [], f"pixel-v05-street-person-{index}", (0.30, 1.45, 0.30), (x, 0.82, z), _mix(wood, dark, 0.35), "person_proxy", "photo_inferred_person", grid=DETAIL_VOXEL)
+        _add_part(scene, objects, [], f"pixel-v05-street-person-head-{index}", (0.38, 0.38, 0.38), (x, 1.72, z), _mix(wood, wall, 0.20), "person_detail", "photo_inferred_person", grid=DETAIL_VOXEL)
+
+    movement = MovementProfile(
+        kind="pixel_street_walk_sample",
+        start=[0.0, 1.625, 8.0],
+        bounds={"x": [-5.25, 5.25], "y": [1.625, 1.625], "z": [-14.25, 8.50]},
+        walk_speed=2.4,
+        fly_speed=0.0,
+        allow_flight=False,
+        ground_follow=False,
+        ground_y=1.625,
+        collision_radius=CHARACTER_RADIUS,
+        route_checkpoints=[[0.0, 1.625, 5.0], [3.8, 1.625, 5.0], [3.8, 1.625, -5.8], [0.0, 1.625, -11.5]],
+        collision_boxes=collisions,
+    )
+    return _finalize_v02(
+        image_path, output_dir, scene_id, scene, objects, collisions, movement, palette, "street",
+        "像素风 V05 街道候选：S01 的道路方向、建筑边缘、人车树分离和接地关系用于布局提示；主要对象是可见的简化代理，未声称完整主体重建。",
+        ["palette_cues", "road_direction", "foreground_object_separation"],
+        ["continuous_road", "sidewalks", "building_masses", "vehicle_proxies", "person_proxies", "tree_proxies", "collision_envelope"],
+        template=SceneTemplate.street_descent,
+        engine=SceneEngine.street,
+        route_name="pixel_style_sample_v5",
+        layout_version=PIXEL_V05_STREET_LAYOUT_VERSION,
+        version="pixel-v05-street",
+        provider_version="pixel-voxel-v5",
+    )
+
+
+def build_pixel_building_v05(image_path: Path, output_dir: Path, scene_id: str = "pixel-v05-b01") -> dict[str, object]:
+    """Build a facade-only pixel candidate for external building viewing."""
+
+    image_path = image_path.resolve()
+    output_dir = output_dir.resolve()
+    palette = _palette(image_path)
+    roles = palette["roles"]
+    floor, wall, trim = roles["floor"], roles["wall"], roles["trim"]
+    window, wood, lamp, dark = roles["window"], roles["wood"], roles["lamp"], roles["dark"]
+    scene = trimesh.Scene()
+    objects: list[dict[str, object]] = []
+    collisions: list[CollisionBox] = []
+
+    _add_part(scene, objects, [], "pixel-v05-building-ground", (22.00, 0.25, 24.00), (0.0, 0.0, 0.0), floor, "ground", "photo_inferred_foreground")
+    facade = _add_part(scene, objects, collisions, "pixel-v05-building-facade", (15.00, 10.50, 0.45), (0.0, 5.25, -5.50), _mix(wall, dark, 0.18), "facade", "photo_inferred_building_mass", "建筑立面外部边界")
+    _add_part(scene, objects, [], "pixel-v05-building-entry-plinth", (3.25, 0.35, 1.15), (0.0, 0.18, -4.78), trim, "facade_detail", "photo_inferred_foreground", grid=DETAIL_VOXEL)
+    for row in range(4):
+        y = 1.75 + row * 2.05
+        for column in range(5):
+            x = -5.30 + column * 2.65
+            _add_part(scene, objects, [], f"pixel-v05-building-window-{row}-{column}", (1.18, 1.20, 0.10), (x, y, -5.22), window if row < 2 else _mix(window, dark, 0.28), "window", "photo_inferred_window_grid", grid=DETAIL_VOXEL)
+            _add_part(scene, objects, [], f"pixel-v05-building-window-frame-h-{row}-{column}", (1.38, 0.08, 0.14), (x, y + 0.66, -5.16), trim, "window_detail", "procedural_completion", grid=DETAIL_VOXEL)
+            _add_part(scene, objects, [], f"pixel-v05-building-window-frame-v-{row}-{column}", (0.08, 1.38, 0.14), (x, y, -5.16), trim, "window_detail", "procedural_completion", grid=DETAIL_VOXEL)
+    _add_part(scene, objects, [], "pixel-v05-building-entry", (2.25, 2.90, 0.12), (0.0, 1.45, -5.18), _mix(wood, dark, 0.28), "entry_detail", "photo_inferred_opening", grid=DETAIL_VOXEL)
+    for index, x in enumerate((-7.15, 7.15)):
+        _add_part(scene, objects, [], f"pixel-v05-building-side-pillar-{index}", (0.28, 10.90, 0.62), (x, 5.45, -5.28), trim, "facade_detail", "procedural_completion", grid=DETAIL_VOXEL)
+    for index, (x, y, z) in enumerate(((-8.0, 5.5, -1.6), (8.0, 4.0, -2.8), (-6.8, 1.0, -8.8))):
+        _add_part(scene, objects, [], f"pixel-v05-building-wire-{index}", (0.05, 0.05, 12.00), (x, y, z), dark, "foreground_line", "photo_inferred_foreground_line", grid=DETAIL_VOXEL)
+    for index, x in enumerate((-4.5, 4.5)):
+        _add_part(scene, objects, [], f"pixel-v05-building-lamp-{index}", (0.32, 0.55, 0.20), (x, 3.0, -4.95), lamp, "warm_light_accent", "photo_palette_centre", grid=DETAIL_VOXEL)
+
+    movement = MovementProfile(
+        kind="pixel_building_external_walk_sample",
+        start=[0.0, 1.625, 13.0],
+        bounds={"x": [-10.0, 10.0], "y": [1.625, 1.625], "z": [-13.0, 13.75]},
+        walk_speed=2.0,
+        fly_speed=0.0,
+        allow_flight=False,
+        ground_follow=False,
+        ground_y=1.625,
+        collision_radius=CHARACTER_RADIUS,
+        route_checkpoints=[[0.0, 1.625, 8.0], [5.0, 1.625, 8.0], [5.0, 1.625, 0.0], [0.0, 1.625, 0.0]],
+        collision_boxes=collisions,
+    )
+    return _finalize_v02(
+        image_path, output_dir, scene_id, scene, objects, collisions, movement, palette, "facade",
+        "像素风 V05 建筑候选：B01 的楼体轮廓、窗格、夜色/日色关系和前景线条用于外部观察；立面有厚度，但不承诺进入未知室内。",
+        ["palette_cues", "facade_outline", "window_line_and_foreground_lines"],
+        ["facade_thickness", "window_grid", "entry_plinth", "foreground_lines", "external_collision_boundary"],
+        template=SceneTemplate.facade_flight,
+        engine=SceneEngine.facade,
+        route_name="pixel_style_sample_v5",
+        layout_version=PIXEL_V05_BUILDING_LAYOUT_VERSION,
+        version="pixel-v05-building",
+        provider_version="pixel-voxel-v5",
+    )

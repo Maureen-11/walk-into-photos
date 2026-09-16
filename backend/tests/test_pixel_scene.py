@@ -12,6 +12,8 @@ from app.services.pixel_scene import (
     build_pixel_indoor_sample,
     build_pixel_living_v02,
     build_pixel_nature_v03,
+    build_pixel_building_v05,
+    build_pixel_street_v05,
 )
 
 
@@ -99,3 +101,29 @@ def test_pixel_v03_nature_has_layered_ridges_and_walkable_path(tmp_path: Path):
     assert manifest["movement"]["bounds"]["y"] == [1.625, 1.625]
     assert len(manifest["movement"]["route_checkpoints"]) == 4
     assert (output / "scene.glb").stat().st_size > 1000
+
+
+def test_pixel_v05_outdoor_profiles_are_separated_and_external(tmp_path: Path):
+    source = tmp_path / "outdoor.png"
+    image = Image.new("RGB", (48, 30), (80, 100, 130))
+    for y in range(16, 30):
+        for x in range(48):
+            image.putpixel((x, y), (110, 95, 80))
+    image.save(source)
+
+    street_dir = tmp_path / "street"
+    building_dir = tmp_path / "building"
+    street = build_pixel_street_v05(source, street_dir, "pixel-v05-s01-test")
+    building = build_pixel_building_v05(source, building_dir, "pixel-v05-b01-test")
+    street_layout = json.loads((street_dir / "layout.json").read_text(encoding="utf-8"))
+    building_layout = json.loads((building_dir / "layout.json").read_text(encoding="utf-8"))
+
+    assert street["template"] == "street_descent"
+    assert building["template"] == "facade_flight"
+    assert street_layout["profile"] == "street"
+    assert building_layout["profile"] == "facade"
+    assert len(street_layout["objects"]) >= 45
+    assert len(building_layout["objects"]) >= 60
+    assert any(item["role"] == "vehicle_proxy" for item in street_layout["objects"])
+    assert any(item["role"] == "window" for item in building_layout["objects"])
+    assert building["movement"]["allow_flight"] is False
