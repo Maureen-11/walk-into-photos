@@ -8,7 +8,7 @@ from PIL import Image
 from app.config import Settings
 from app.models import RegionConfirmation, SceneTemplate
 from app.services import geometry
-from app.services.photo_supported_scene import LAYOUT_VERSION, build_photo_supported_scene
+from app.services.photo_supported_scene import LAYOUT_VERSION, _photo_palette, build_photo_supported_scene
 
 
 def _source(path: Path) -> None:
@@ -20,6 +20,23 @@ def _moge_scene(path: Path) -> None:
     mesh.apply_translation([0.0, 0.0, -4.0])
     mesh.visual.vertex_colors = np.tile(np.asarray([80, 120, 160, 255], dtype=np.uint8), (len(mesh.vertices), 1))
     trimesh.Scene(mesh).export(path, file_type="glb")
+
+
+def test_generated_material_palette_reads_photo_bands(tmp_path: Path):
+    source = tmp_path / "palette.png"
+    image = Image.new("RGB", (100, 100), (120, 120, 120))
+    for y in range(0, 30):
+        for x in range(100):
+            image.putpixel((x, y), (220, 235, 250))
+    for y in range(70, 100):
+        for x in range(100):
+            image.putpixel((x, y), (150, 105, 70))
+    image.save(source)
+
+    palette = _photo_palette(source)
+
+    assert palette["upper"] != palette["lower"]
+    assert palette["upper"][2] > palette["lower"][2]
 
 
 def test_quality_route_keeps_photo_surface_and_shares_indoor_collision_layout(tmp_path: Path):
