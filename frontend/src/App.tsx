@@ -72,7 +72,7 @@ const api = async (url: string, init?: RequestInit) => {
 
 function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, active }: { objectUrl: string; manifest: Manifest; lookRef: React.MutableRefObject<{ yaw: number; pitch: number }>; onReset: () => void; onPosition: (position: number[]) => void; active: boolean }) {
   const { scene } = useGLTF(objectUrl);
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const keys = useRef(new Set<string>());
   const flying = useRef(false);
   const lastPositionReport = useRef(0);
@@ -152,13 +152,30 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
     }
     lastValidTerrainPosition.current.set(camera.position.x, camera.position.y, camera.position.z);
     if (manifest.camera && camera instanceof THREE.PerspectiveCamera) {
-      camera.fov = manifest.camera.fov_y ?? camera.fov;
+      const spec = manifest.camera;
+      const canvasAspect = Math.max(size.width / Math.max(size.height, 1), 0.1);
+      const imageAspect = spec.image_size && spec.image_size[1] ? spec.image_size[0] / spec.image_size[1] : canvasAspect;
+      // MoGe's fov_x/fov_y belongs to the source image aspect. R3F changes
+      // camera.aspect to the viewer canvas, so applying fov_y unchanged on a
+      // wide canvas expands the horizontal view and leaves the photo surface
+      // squeezed into the centre. Preserve the source framing by deriving the
+      // other angle from the wider side of the actual canvas.
+      if (spec.fov_x != null && spec.fov_y != null) {
+        const radians = (degrees: number) => degrees * Math.PI / 180;
+        const degrees = (radiansValue: number) => radiansValue * 180 / Math.PI;
+        camera.fov = canvasAspect >= imageAspect
+          ? degrees(2 * Math.atan(Math.tan(radians(spec.fov_x) / 2) / canvasAspect))
+          : spec.fov_y;
+      } else {
+        camera.fov = spec.fov_y ?? camera.fov;
+      }
+      camera.aspect = canvasAspect;
       camera.near = manifest.camera.near;
       camera.far = manifest.camera.far;
       camera.updateProjectionMatrix();
     }
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", clearKeys); document.removeEventListener("visibilitychange", clearKeys); };
-  }, [active, camera, manifest.camera, movement, onReset]);
+  }, [active, camera, manifest.camera, movement, onReset, size.height, size.width]);
   useFrame((_, delta) => {
     const forward = Number(keys.current.has("w") || keys.current.has("arrowup")) - Number(keys.current.has("s") || keys.current.has("arrowdown"));
     const sideways = Number(keys.current.has("d") || keys.current.has("arrowright")) - Number(keys.current.has("a") || keys.current.has("arrowleft"));
