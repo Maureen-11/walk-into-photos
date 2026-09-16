@@ -34,6 +34,8 @@ MoGe 生成的相机空间照片投色表面不再被固定房间替换。室内
 - 浏览器：I01 无控制台错误；初始照片表面可辨认；W 移动位置改变；转向后 W 仍按当前视线移动；R 回到 `[0,0,0]`。
 - 初步视检：起点照片表面已恢复；侧后视角由生成结构填充，但仍需继续改善纹理连续性与家具/墙面细节，当前状态为待视觉复核，不写作质量通过。
 - 相机适配回归：前端 TypeScript/Vite 构建通过；离线查看器源码随同入口更新。由于浏览器插件运行时路径缺失，本次未新增插件截图，视觉质量仍保持 `needs_visual_review`。
+- 材质取色回归：生成结构不再使用单一整图平均色，改为读取照片上／下／左右／中心色带；新增回归用例后后端测试为 56 项全部通过。
+- 第二轮十图批处理：`D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json`，10/10 为 `photo_supported_quality`，无 MoGe 失败或静默粗模兜底；MoGe＋结构阶段实测约 3.8–6.3 秒／图，耗时来自实际推理与导出，不人为等待。
 
 ## 保留的失败与限制
 
@@ -41,4 +43,4 @@ MoGe 生成的相机空间照片投色表面不再被固定房间替换。室内
 - 历史最佳 GLB、录像不在 F 盘交接包中，当前使用固定交接提交和本地权重重新生成，不能声称复现旧机器最佳产物。
 - 单张照片不可见区域仍是估计补全；没有第二机证据时，跨机状态保持未验证。
 
-API 四类登记：[api-four.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/api-four.json)；十图批处理：[quality-batch.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/batch/quality-batch.json)。
+API 四类登记：[api-four.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/api-four.json)；第一轮十图批处理：[quality-batch.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/batch/quality-batch.json)；材质取色后的第二轮批处理：[quality-batch.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json)。

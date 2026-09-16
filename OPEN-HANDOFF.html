@@ -53,7 +53,7 @@
 </ol>
 <h2 id="luna">当前状态（Luna 计划）</h2>
 <p>工作树：<code>D:/CodexProjects/walk-into-photos-luna</code>  · 分支：<code>handoff/luna-20260915</code>  · 基准提交：<code>a78122b6f179d2b5e82ff02c9ecc7c767d637ae7</code>。</p>
-<p>工程可以运行，当前已接入照片支持质量路线；真实室内侧视仍需视觉复核。不要把生成结束、测试通过或候选 GLB 当作真实空间质量通过。最新回归为后端 <strong>55 passed</strong>、前端 <code>pnpm run build</code> 通过、<code>pip check</code> 通过；10 张素材已在本地模型环境逐张完成 Moondream 分类与 MoGe 质量路线生成。I01 已完成真实 API、浏览器和 file:// 离线路线验证，但视觉质量仍保守标为待复核。P14 安全切换基础层保留，旧记录继续可读。</p>
+<p>工程可以运行，当前已接入照片支持质量路线；真实室内侧视仍需视觉复核。不要把生成结束、测试通过或候选 GLB 当作真实空间质量通过。最新回归为后端 <strong>56 passed</strong>、前端 <code>pnpm run build</code> 通过、<code>pip check</code> 通过；10 张素材已在本地模型环境逐张完成 Moondream 分类与 MoGe 质量路线生成。I01 已完成真实 API、浏览器和 file:// 离线路线验证，但视觉质量仍保守标为待复核。P14 安全切换基础层保留，旧记录继续可读。</p>
 <table>
 <thead>
 <tr>
@@ -144,10 +144,10 @@
 <p>本轮新增路线是“照片支持质量场景”：有效图片统一进入本地规划；质量请求默认恢复 MoGe 照片投色表面，再按类别补充有限实体结构与共享碰撞布局。模型失败时才登记 <code>procedural_coarse</code>，并保留 <code>fallback_reason</code>。通用展厅不再是默认质量路线。</p>
 <p>隔离真实模型证据：<a href="D:/CodexProjects/luna-evidence/run-20260916-planner-r1/">run-20260916-planner-r1</a> 已用本机 Moondream 对 10 图分类（5 室内、2 建筑、1 自然、1 街道、1 动物）；<a href="D:/CodexProjects/luna-evidence/run-20260916-real-route-r1/luna-real-route-report.md">run-20260916-real-route-r1 报告</a> 记录 I01、I02、ANIMAL 的 <code>moondream2-local</code> 分析、粗模生成、浏览器路线和导出。分类与 API 接入成功不等于真实空间几何通过，演示默认仍保留确定性的粗模兜底。</p>
 <p>已亲自检查的证据目录：<a href="D:/CodexProjects/luna-evidence/run-20260916-coarse-route-r3">run-20260916-coarse-route-r3</a>，汇总报告为 <a href="D:/CodexProjects/luna-evidence/run-20260916-coarse-route-r3/luna-coarse-route-report.md"><code>luna-coarse-route-report.md</code></a>。其中 <code>batch-ten.json</code> 是 10 图结果，<code>heading-route-check.json</code> 覆盖 0°／90°／180°／270°／45°，<code>browser-check.json</code> 覆盖转身后 W、碰墙和 R 重置，<code>offline-r8-check.json</code> 与 <code>offline-r8.png</code> 是本机断网包检查和截图，<code>coarse-scene-r4.zip</code> 是备用演示包。</p>
-<p>当前结论分开记录：工程运行 <strong>通过</strong>；照片支持质量生成、相机朝向移动、实体碰撞、重置和本机离线加载 <strong>已验证</strong>；真实照片空间还原和视觉质量 <strong>待复核</strong>，侧视仍有简化结构和纹理连续性限制；第二台电脑离线体验 <strong>等待条件</strong>。旧 P09/P10 的空洞、拉伸和不连续失败证据仍然有效，没有用本次截图覆盖它们。</p>
-<p>质量恢复本轮证据：<a href="D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/">quality-recovery-r1</a>；十图结果表为 <code>batch/quality-batch.json</code>，I01 浏览器和离线截图均在该目录。质量场景 manifest 记录照片支持路线、MoGe 权重、布局版本、碰撞资源和生成区域；当前没有把待复核截图写成通过。</p>
+<p>当前结论分开记录：工程运行 <strong>通过</strong>；照片支持质量生成、相机朝向移动、实体碰撞、重置和本机离线加载 <strong>已验证</strong>；真实照片空间还原和视觉质量 <strong>待复核</strong>，侧视仍有简化结构和纹理连续性限制；第二台电脑离线体验 <strong>等待条件</strong>。旧 P09/P10 的空洞、拉伸和不连续失败证据仍然有效，没有用本次候选覆盖它们。</p>
+<p>质量恢复本轮证据：<a href="D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/">quality-recovery-r1</a>；材质取色后的第二轮十图结果表为 <a href="D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json"><code>quality-batch.json</code></a>，I01 浏览器和离线截图均在第一轮目录。质量场景 manifest 记录照片支持路线、MoGe 权重、布局版本、碰撞资源和生成区域；当前没有把待复核截图写成通过。</p>
 <p>最新室内查看器路线证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r27/P10-r27-report.md">P10 r27 报告</a>；语义法线独立实验：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r26/P10-r26-report.md">P10 r26 报告</a>；上一轮室内线段约束证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r25/P10-r25-report.md">P10 r25 报告</a>；本地语义检测诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r23/P10-r23-report.md">P10 r23 报告</a>；支撑像素与透视候选复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r22/P10-r22-report.md">P10 r22 报告</a>；前一轮透视候选诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r21/P10-r21-report.md">P10 r21 报告</a>；无语义排除对照：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r19/P10-r19-report.md">P10 r19 报告</a>；I01 线段约束证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r17/P10-r17-report.md">P10 r17 报告</a>；前一轮线段诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r16/P10-r16-report.md">P10 r16 报告</a>；最近几何候选：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r15/P10-r15-report.md">P10 r15 报告</a>。P08 Moondream 启动环境证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r2/P08-r2-report.md">P08-r2 报告</a>；P08 MoGe 启动环境证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r4/P08-r4-report.md">P08-r4 报告</a>；旧服务清理记录：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r3-service-cleanup/P08-r3-service-cleanup-report.md">P08-r3 报告</a>；P14 安全层证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p14-r1/P14-r1-report.md">P14 r1 报告</a>。当前交接入口证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r19/P03-r19-report.md">P03-r19 报告</a>；上一轮入口复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r18/P03-r18-report.md">P03-r18 报告</a>；更早入口复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r17/P03-r17-report.md">P03-r17 报告</a>。真实 API 流程证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-moondream-api/P08-moondream-api-report.md">P08 Moondream API 报告</a>。证据目录统一位于 <code>D:/CodexProjects/luna-evidence</code>，运行产物统一位于 <code>D:/CodexProjects/luna-runtime</code>；两处均使用新的运行编号，不覆盖旧数据。</p>
-<p>当前没有推送、合并、发布、外部上传或删除操作。F 盘原始交接包和照片只读使用。</p>
+<p>当前未合并 PR、未发布、未上传照片或模型、未删除旧数据。按本轮用户授权，代码已同步至 GitHub 独立分支 <code>handoff/luna-20260915</code>；F 盘原始交接包和照片仍只读使用。</p>
 <h2 id="section-2">新电脑演示启动</h2>
 <p>以当前工作树 <code>D:\CodexProjects\walk-into-photos-luna</code> 为例。先准备 Python 3.12、Node 与 pnpm。以下不安装真实模型；不要复制旧 .venv。精确的已验证版本和安装顺序见 <a href="docs/handoff/ENVIRONMENT_VERIFIED.md">环境记录</a>。</p>
 <pre><code class="language-powershell">cd D:\CodexProjects\walk-into-photos-luna
@@ -175,7 +175,7 @@ pnpm dev --host 127.0.0.1
 <p>工程包排除 .env、照片/录像、模型、虚拟环境、数据库、GLB、第三方源码副本和 Git 历史。私人案例经所有者同意单独交接。原机器运行数据未删除。</p>
 <p>原机记录 RTX 4050 Laptop 约6GB；朋友口述 RTX4060 8GB，新电脑须复核。生成端需要模型；体验端加载结果，但浏览器性能仍需测试。远程 API 配置已预留，尚无已部署生成服务器。</p>
 <p>旧段落中的导出限制是历史记录。当前 P06 已验证本机断网 <code>file://</code> 双击导出包：入口自包含 manifest 与 GLB 数据，不依赖本地相对 <code>fetch</code> 或模块导入；第二台电脑仍未验证。ZIP 文件齐全不自动代表跨机通过。</p>
-<p>请先读三份专用文档并启动演示，再按 Codex 交接文档第一项任务推进。源码可提交到确认的新分支；不要删旧历史。包内 PACKAGE_MANIFEST.json 记录文件哈希。当前交付不包含自动 GitHub 推送。</p>
+<p>请先读三份专用文档并启动演示，再按 Codex 交接文档第一项任务推进。源码已同步到独立分支 <code>handoff/luna-20260915</code>；不要删旧历史。包内 PACKAGE_MANIFEST.json 记录文件哈希。当前未同步照片、模型权重或运行数据。</p>
 </section>
 <section id='project-brief' class='document'><div class='section-label'>项目大纲、进度与前瞻</div><h1 id="section">给接手者：我们想做什么、做到哪里、接着怎样做</h1>
 <h2 id="section-1">项目的起点</h2>
