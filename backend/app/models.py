@@ -271,3 +271,8 @@ class SceneManifest(BaseModel):
     manual_region_sha256: str | None = None
     photo_supported_regions: list[str] = Field(default_factory=list)
     generated_regions: list[str] = Field(default_factory=list)
+    # Isolated style-route metadata.  The defaults keep historical manifests
+    # readable while allowing experiments such as the pixel sample to carry
+    # their exact grid, palette and material contract.
+    style_route: str = "real_photo"
+    pixel_spec: dict[str, object] = Field(default_factory=dict)
