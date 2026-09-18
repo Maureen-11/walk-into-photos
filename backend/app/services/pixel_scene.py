@@ -6252,3 +6252,137 @@ def build_pixel_corridor_v36(image_path: Path, output_dir: Path, scene_id: str =
 
 def build_pixel_living_v36(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r36-i02") -> dict[str, object]:
     return _build_indoor_precision_v36(image_path, output_dir, scene_id, build_pixel_living_v31, "living_room")
+
+
+# V37 is a composition pass for the living-room sample.  V36 improved local
+# surfaces, but the GPU view still read as separated props.  This pass adds a
+# continuous sectional-sofa silhouette, a patterned rug anchor and a clearer
+# TV/window/plant relationship while retaining V36's tested collision shell.
+PIXEL_V37_LAYOUT_VERSION = "pixel-v37-i02-photo-anchor-composition-pass-31"
+
+
+def build_pixel_living_v37(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r37-i02") -> dict[str, object]:
+    base_builder = build_pixel_living_v36
+    base_builder(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    sofa, plant = roles["sofa"], roles["plant"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    # The source I02 is dominated by a continuous white sectional sofa.  V31
+    # had readable cushions but too much separation between them; these low
+    # bases, back cushions and a corner block restore the silhouette.
+    sofa_shadow = _mix(sofa, trim, 0.34)
+    sofa_mid = _mix(sofa, wall, 0.16)
+    sofa_high = _mix(sofa, accent, 0.05)
+    add_detail("pixel-q05-r37-i02-sectional-front-base", (3.52, 0.20, 0.20), (-2.10, 0.56, -0.92), sofa_shadow, "upholstery_structure", "photo_supported_sectional_sofa", FURNITURE_VOXEL)
+    add_detail("pixel-q05-r37-i02-sectional-chaise-base", (0.92, 0.20, 1.78), (-0.16, 0.56, -1.94), sofa_shadow, "upholstery_structure", "photo_supported_sectional_sofa", FURNITURE_VOXEL)
+    add_detail("pixel-q05-r37-i02-sectional-corner", (0.82, 1.05, 0.82), (-0.28, 1.04, -1.28), sofa_mid, "upholstery_structure", "photo_supported_sectional_sofa", FURNITURE_VOXEL)
+    for index, (x, z, width) in enumerate(((-2.78, -1.45, 1.20), (-1.40, -1.45, 1.20), (-0.10, -1.45, 0.72))):
+        add_detail(f"pixel-q05-r37-i02-sectional-back-{index}", (width, 0.72, 0.18), (x, 1.46, z), sofa_mid, "upholstery_structure", "photo_supported_sectional_sofa", FURNITURE_VOXEL)
+        add_xy(
+            f"pixel-q05-r37-i02-sectional-back-pixels-{index}",
+            (".aaaaaa.", "abbbbbba", "abccccba", "abccccba", ".aaaaaa."),
+            (x, 1.46, z + 0.115), (0.12, 0.12), 0.022,
+            {"a": sofa_shadow, "b": sofa_mid, "c": sofa_high},
+            "upholstery_pixel_surface", "photo_supported_sectional_sofa",
+        )
+
+    # Use a compact, ordered rug pattern to bind the table and sofa into one
+    # foreground group.  It is a surface layer and remains non-colliding.
+    rug_dark = _mix(floor, trim, 0.28)
+    rug_light = _mix(floor, sofa, 0.18)
+    add_xy(
+        "pixel-q05-r37-i02-rug-centre-weave",
+        ("..aaaaaaaa..", ".abbbbbbbba.", "abacccccaba", "abcccccc cba".replace(" ", ""),
+         "abcccccc cba".replace(" ", ""), "abacccccaba", ".abbbbbbbba.", "..aaaaaaaa.."),
+        (0.05, 0.255, 0.34), (0.18, 0.035), 0.018,
+        {"a": rug_dark, "b": rug_light, "c": _mix(rug_light, accent, 0.08)},
+        "rug_pixel_surface", "photo_supported_rug",
+    )
+    for index, x in enumerate((-1.55, -0.95, -0.35, 0.25, 0.85, 1.45)):
+        add_detail(f"pixel-q05-r37-i02-rug-weave-line-{index}", (0.42, 0.018, 0.025), (x, 0.275, 0.34), rug_dark, "rug_surface_detail", "photo_supported_rug", MICRO_VOXEL)
+
+    # The reference living room separates a dark TV wall from a bright rear
+    # window.  Add a narrow cabinet top, TV lower edge and a few blind shadows
+    # to make that depth ordering survive a small camera turn.
+    add_detail("pixel-q05-r37-i02-tv-wall-lower-edge", (3.05, 0.08, 0.10), (-2.58, 1.05, -6.02), _mix(wood, dark, 0.28), "display_frame_detail", "photo_supported_tv_wall", FURNITURE_VOXEL)
+    add_detail("pixel-q05-r37-i02-tv-wall-screen-glint", (1.88, 0.025, 0.025), (-2.58, 2.70, -5.99), _mix(window, accent, 0.18), "display_surface_detail", "photo_supported_tv_wall", MICRO_VOXEL)
+    for index, x in enumerate((0.34, 0.76, 1.18, 1.60, 2.02, 2.44, 2.86, 3.28)):
+        add_detail(f"pixel-q05-r37-i02-blind-shadow-{index}", (0.035, 1.84, 0.025), (x, 2.34, -6.335), _mix(window, dark, 0.42), "window_blind_shadow", "photo_supported_window_covering", MICRO_VOXEL)
+
+    # Replace the plant's single blocky edge with a stem/leaf fan whose three
+    # values remain readable against the bright wall.
+    add_detail("pixel-q05-r37-i02-plant-pot-rim", (0.74, 0.10, 0.74), (-3.62, 0.58, 0.44), _mix(sofa, wall, 0.06), "vegetation_container", "photo_supported_plant_pot", FURNITURE_VOXEL)
+    add_detail("pixel-q05-r37-i02-plant-stem-main", (0.075, 1.58, 0.075), (-3.62, 1.72, 0.44), _mix(plant, dark, 0.32), "vegetation_structure", "photo_supported_vegetation", MICRO_VOXEL)
+    for index, (x, y, colour) in enumerate((
+        (-4.02, 2.14, plant), (-3.78, 2.40, _mix(plant, window, 0.16)),
+        (-3.44, 2.62, _shade(plant, 0.72)), (-3.10, 2.90, _mix(plant, lamp, 0.10)),
+        (-3.54, 3.18, plant),
+    )):
+        add_detail(f"pixel-q05-r37-i02-plant-fan-{index}", (0.48, 0.24, 0.20), (x, y, 0.44), colour, "vegetation_surface_detail", "photo_supported_vegetation", FURNITURE_VOXEL)
+
+    layout_version = PIXEL_V37_LAYOUT_VERSION
+    detail_pass = "v37-i02-photo-anchor-composition-pass-31"
+    route_name = "pixel_style_sample_v37"
+    generated_regions = [
+        "continuous_sectional_sofa", "rug_centre_weave", "tv_wall_depth_anchor",
+        "window_blind_shadow_layers", "plant_fan_silhouette",
+    ]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_i02_photo_anchor_composition_pass"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["composition_policy"] = "continuous_furniture_grouping_before_micro_decoration"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v37"
+    manifest["provider_version"] = "pixel-voxel-v37"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V37 I02 客厅照片锚点构图候选：继承 V36 的表面细节、碰撞和路线，"
+        "把白色组合沙发、茶几地毯、电视墙、后窗百叶和植物组织为连续前中后景；"
+        "新增件只参与视觉表达，不改变碰撞，不声称精确恢复不可见空间。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_living_room_photo_anchor_composition"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["composition_policy"] = "continuous_furniture_grouping_before_micro_decoration"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V37 · I02 客厅照片锚点构图候选\n\n"
+        "在 V36 局部表面分离基础上，优先恢复组合沙发、茶几地毯、电视墙、后窗与植物的整体关系。\n"
+        "碰撞与移动保持继承；质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest

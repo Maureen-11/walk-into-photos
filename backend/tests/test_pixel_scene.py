@@ -23,6 +23,8 @@ from app.services.pixel_scene import (
     PIXEL_V36_LAYOUT_VERSIONS,
     build_pixel_corridor_v36,
     build_pixel_living_v36,
+    PIXEL_V37_LAYOUT_VERSION,
+    build_pixel_living_v37,
 )
 
 
@@ -229,3 +231,20 @@ def test_pixel_v36_indoor_surface_pass_keeps_collision_contract(tmp_path: Path):
     assert len(living_layout["objects"]) > 2200
     assert any(item["role"] == "window_reflection_pixel" for item in corridor_layout["objects"])
     assert any(item["role"] == "upholstery_seam_detail" for item in living_layout["objects"])
+
+
+def test_pixel_v37_living_composition_adds_anchor_group_without_new_collision(tmp_path: Path):
+    source = tmp_path / "living.png"
+    Image.new("RGB", (48, 32), (235, 236, 232)).save(source)
+    output = tmp_path / "living-v37"
+
+    manifest = build_pixel_living_v37(source, output, "pixel-v37-i02-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    ids = {item["id"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v37"
+    assert manifest["layout_version"] == PIXEL_V37_LAYOUT_VERSION
+    assert len(manifest["movement"]["collision_boxes"]) == 8
+    assert "pixel-q05-r37-i02-sectional-front-base" in ids
+    assert any(item.startswith("pixel-q05-r37-i02-rug-centre-weave") for item in ids)
+    assert "pixel-q05-r37-i02-tv-wall-lower-edge" in ids
