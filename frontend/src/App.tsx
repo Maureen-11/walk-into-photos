@@ -86,6 +86,7 @@ function lightingFor(manifest: Manifest) {
     facade_blue_hour: { background: "#18243a", sky: "#b4cced", ground: "#34394d", hemi: 0.78, ambient: 0.42, key: "#b6d5ff", keyIntensity: 0.92, fill: "#f3b26c", fillIntensity: 0.32, shadows: true, emissiveLift: 0.012 },
     facade_blue_hour_v2: { background: "#142039", sky: "#c0d9f2", ground: "#2c354c", hemi: 0.62, ambient: 0.28, key: "#c4ddff", keyIntensity: 1.10, fill: "#f6ad68", fillIntensity: 0.46, shadows: true, emissiveLift: 0.016 },
     facade_blue_hour_v3: { background: "#101b34", sky: "#c8e0f7", ground: "#26334b", hemi: 0.82, ambient: 0.40, key: "#c0ddff", keyIntensity: 1.28, fill: "#ffb870", fillIntensity: 0.58, shadows: true, emissiveLift: 0.028 },
+    facade_blue_hour_v4: { background: "#101b34", sky: "#d6e8ff", ground: "#2b3850", hemi: 1.02, ambient: 0.54, key: "#d5e8ff", keyIntensity: 1.34, fill: "#ffc487", fillIntensity: 0.78, shadows: true, emissiveLift: 0.040 },
     street_soft_daylight_v3: { background: "#1f2d42", sky: "#eaf6fb", ground: "#4f5f68", hemi: 0.92, ambient: 0.48, key: "#fff3da", keyIntensity: 1.76, fill: "#9bc7dc", fillIntensity: 0.20, shadows: true, emissiveLift: 0.010 },
   };
   return presets[preset ?? ""] ?? { background: "#263044", sky: "#f8fbff", ground: "#7d8798", hemi: 1.2, ambient: 1.0, key: "#ffffff", keyIntensity: 1.2, fill: "#ffffff", fillIntensity: 0, shadows: false, emissiveLift: 0.07 };

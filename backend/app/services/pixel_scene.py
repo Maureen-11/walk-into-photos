@@ -7041,3 +7041,827 @@ def build_pixel_building_v42(image_path: Path, output_dir: Path, scene_id: str =
         ["facade_contour_courses", "window_pixel_cores", "balcony_light_nodes", "service_box_pixels", "foreground_wire_leaf_layers"],
         "facade_blue_hour_v3", "candidate_building_pixel_material_light_hierarchy",
     )
+
+
+# V43/V44 are targeted corrections from the V40-V42 screenshot review.  N01
+# needed a clearer mountain silhouette and less visual weight from the nearest
+# fence wires.  B01 needed a brighter local night-value hierarchy; this is a
+# lighting-only comparison and deliberately does not alter its geometry.
+PIXEL_V43_LAYOUT_VERSION = "pixel-v43-n01-ridge-silhouette-fence-balance-pass-35"
+PIXEL_V44_LAYOUT_VERSION = "pixel-v44-b01-blue-hour-readability-pass-35"
+
+
+def build_pixel_nature_v43(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r43-n01") -> dict[str, object]:
+    build_pixel_nature_v40(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    window, dark, accent, trim, floor = roles["window"], roles["dark"], roles["accent"], roles["trim"], roles["floor"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    # The V40 screenshot showed the three inherited broad rails dominating the
+    # middle of the image.  Keep the lower rail and posts as a photo-supported
+    # foreground anchor, remove only the two redundant render meshes, and keep
+    # the thinner wire/detail layers.  Collision data is untouched.
+    removed_ids = {
+        "pixel-q05-r22-n01-fence-rail-1",
+        "pixel-q05-r22-n01-fence-rail-2",
+    }
+    for geometry_id in removed_ids:
+        if geometry_id in scene.geometry:
+            scene.delete_geometry(geometry_id)
+    layout["objects"] = [item for item in objects if item["id"] not in removed_ids]
+    manifest["detail_object_ids"] = [item for item in manifest.get("detail_object_ids", []) if item not in removed_ids]
+    objects = layout["objects"]
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    contour = _mix(dark, trim, 0.10)
+    snow = _mix(window, [255, 255, 248], 0.42)
+    snow_shadow = _mix(window, dark, 0.38)
+    # Add stepped crest pixels at each depth band.  Unlike a repeated facet
+    # stamp, these pieces describe a continuous skyline and remain visible at
+    # the first-person horizon.
+    crest_specs = (
+        ("near", -7.9, ((-6.2, 1.72), (-5.0, 2.05), (-3.8, 2.34), (-2.6, 2.10), (-1.4, 1.78), (-0.2, 2.16), (1.0, 2.48), (2.2, 2.22), (3.4, 1.86), (4.6, 2.08), (5.8, 1.76))),
+        ("mid", -12.8, ((-6.6, 1.92), (-5.0, 2.20), (-3.4, 2.44), (-1.8, 2.18), (-0.2, 2.02), (1.4, 2.38), (3.0, 2.58), (4.6, 2.22), (6.0, 2.00))),
+        ("far", -17.4, ((-6.8, 2.18), (-5.2, 2.36), (-3.6, 2.52), (-2.0, 2.32), (-0.4, 2.20), (1.2, 2.42), (2.8, 2.64), (4.4, 2.40), (5.8, 2.26))),
+    )
+    for band, z, points in crest_specs:
+        for index, (x, y) in enumerate(points):
+            add_detail(f"pixel-q05-r43-n01-{band}-ridge-crest-{index}", (0.92, 0.12, 0.16), (x, y, z), snow_shadow if index % 3 == 0 else snow, "mountain_ridge_contour", "photo_supported_snow_ridge", FURNITURE_VOXEL)
+            if index % 2 == 0:
+                add_detail(f"pixel-q05-r43-n01-{band}-ridge-edge-{index}", (0.40, 0.035, 0.035), (x + 0.18, y + 0.09, z - 0.09), contour, "mountain_ridge_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+
+    # A few directional snow planes connect the newly readable crests to the
+    # existing near-ground surface; they are not collision surfaces.
+    for index, (x, z, width) in enumerate(((-5.2, -7.1, 1.35), (-2.8, -7.7, 1.10), (0.2, -8.0, 1.48), (3.3, -7.5, 1.22), (5.3, -7.0, 0.92))):
+        add_detail(f"pixel-q05-r43-n01-snow-slope-plane-{index}", (width, 0.028, 0.24), (x, 0.52, z), _mix(snow, accent, 0.10 if index % 2 else 0.0), "snow_surface_detail", "photo_supported_near_ground", MICRO_VOXEL)
+
+    layout_version = PIXEL_V43_LAYOUT_VERSION
+    route_name = "pixel_style_sample_v43"
+    detail_pass = "v43-n01-ridge-silhouette-fence-balance-pass-35"
+    generated_regions = ["stepped_multi_depth_ridge_contours", "snow_slope_connection_planes", "foreground_fence_weight_balance"]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_n01_ridge_silhouette_and_fence_weight_correction"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = "outdoor_cool_daylight_v2"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v43"
+    manifest["provider_version"] = "pixel-voxel-v43"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V43 N01 定向修正候选：继承 V40 的雪面像素、冷色光影、碰撞和路线，"
+        "删除两条过重的重复围栏渲染轨，保留低位围栏与细线，并用近中远连续阶梯雪脊强化地平线；"
+        "删除仅影响视觉权重，不改变碰撞，仍需动态回头验收。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_nature_ridge_silhouette_fence_balance"
+    manifest["quality_metrics"]["lighting_status"] = "candidate_outdoor_cool_daylight_v2"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = "outdoor_cool_daylight_v2"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V43 · N01 雪脊轮廓与围栏权重修正候选\n\n"
+        "继承 V40；仅调整可见围栏层级并增加连续阶梯雪脊，不改变碰撞。质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def build_pixel_building_v44(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r44-b01") -> dict[str, object]:
+    build_pixel_building_v42(image_path, output_dir, scene_id)
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    layout_version = PIXEL_V44_LAYOUT_VERSION
+    route_name = "pixel_style_sample_v44"
+    detail_pass = "v44-b01-blue-hour-readability-pass-35"
+    preset = "facade_blue_hour_v4"
+    generated_regions = ["blue_hour_local_value_lift"]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_b01_blue_hour_local_value_readability_comparison"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = preset
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v44"
+    manifest["provider_version"] = "pixel-voxel-v44"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V44 B01 光影可读性对照候选：完全继承 V42 的立面、窗内像素、阳台、前景线、"
+        "碰撞和外部路线，仅提高蓝调夜景的环境补光与局部暖窗可读性，不改变几何。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_building_pixel_material_light_hierarchy"
+    manifest["quality_metrics"]["lighting_status"] = "candidate_facade_blue_hour_v4"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = preset
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V44 · B01 蓝调夜景光影可读性对照候选\n\n"
+        "完全继承 V42 几何、碰撞和路线，仅提高环境补光与局部暖窗层次；质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+# V45 responds to the user-provided N01 route recording.  The route proved
+# the controller and collision margin, but side turns exposed empty grey space
+# because the inherited mountain masses were concentrated on the forward
+# -Z view.  Add bounded side shoulder terrain and stepped lateral ridges as
+# procedural completion, without enclosing the scene in a fake skybox or
+# changing the walkable/collision contract.
+PIXEL_V45_LAYOUT_VERSION = "pixel-v45-n01-lateral-terrain-closure-pass-36"
+
+
+def build_pixel_nature_v45(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r45-n01") -> dict[str, object]:
+    build_pixel_nature_v43(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    floor, window = roles["floor"], roles["window"]
+    dark, accent, trim = roles["dark"], roles["accent"], roles["trim"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    contour = _mix(dark, trim, 0.12)
+    shoulder_dark = _mix(floor, dark, 0.24)
+    shoulder_mid = _mix(floor, window, 0.16)
+    shoulder_light = _mix(window, accent, 0.12)
+
+    # Bounded side shoulders occupy the near/mid terrain bands that were empty
+    # when the user turned away from the forward composition.  They are broken
+    # into stepped masses, so side views show terrain depth rather than a flat
+    # enclosing wall.
+    shoulder_specs = (
+        ("left", -7.8, ((-1.8, 0.48, 1.20, 2.40), (-4.8, 0.66, 1.60, 2.90), (-7.9, 0.84, 1.90, 3.20), (-11.0, 1.08, 2.20, 3.50))),
+        ("right", 7.8, ((-1.8, 0.48, 1.20, 2.40), (-4.8, 0.66, 1.60, 2.90), (-7.9, 0.84, 1.90, 3.20), (-11.0, 1.08, 2.20, 3.50))),
+    )
+    for side, x, entries in shoulder_specs:
+        for index, (z, y, height, depth) in enumerate(entries):
+            add_detail(
+                f"pixel-q05-r45-n01-{side}-shoulder-mass-{index}", (1.35, height, depth), (x, y, z),
+                shoulder_dark if index % 2 else shoulder_mid, "lateral_terrain_mass", "procedural_completion", FURNITURE_VOXEL,
+            )
+            add_detail(
+                f"pixel-q05-r45-n01-{side}-shoulder-snow-cap-{index}", (1.16, 0.08, depth * 0.78), (x, y + height * 0.52, z - 0.05),
+                shoulder_light, "lateral_terrain_surface", "procedural_completion", MICRO_VOXEL,
+            )
+            if index < 3:
+                add_detail(
+                    f"pixel-q05-r45-n01-{side}-shoulder-contour-{index}", (0.82, 0.035, 0.05), (x - (0.18 if side == "left" else -0.18), y + height * 0.52 + 0.06, z - depth * 0.22),
+                    contour, "lateral_terrain_contour", "pixel_style_contour_rule", MICRO_VOXEL,
+                )
+
+    # Far lateral ridges add a second depth layer at the turn without
+    # extending the near terrain across the whole screen.
+    for side, x in (("left", -6.2), ("right", 6.2)):
+        for index, (z, y, width, height) in enumerate(((-13.0, 1.52, 1.55, 1.10), (-15.1, 1.72, 1.85, 1.34), (-17.2, 1.92, 2.10, 1.55))):
+            add_detail(
+                f"pixel-q05-r45-n01-{side}-far-ridge-{index}", (width, height, 1.10), (x, y, z), _mix(shoulder_mid, dark, 0.14),
+                "lateral_ridge_mass", "procedural_completion", FURNITURE_VOXEL,
+            )
+            add_detail(
+                f"pixel-q05-r45-n01-{side}-far-ridge-edge-{index}", (width * 0.72, 0.04, 0.05), (x, y + height * 0.54, z - 0.22), shoulder_light,
+                "lateral_ridge_contour", "procedural_completion", MICRO_VOXEL,
+            )
+
+    layout_version = PIXEL_V45_LAYOUT_VERSION
+    route_name = "pixel_style_sample_v45"
+    detail_pass = "v45-n01-lateral-terrain-closure-pass-36"
+    generated_regions = ["bounded_lateral_terrain_shoulders", "side_view_ridge_layers", "route_recording_driven_background_closure"]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_n01_route_driven_lateral_terrain_closure"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = "outdoor_cool_daylight_v2"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v45"
+    manifest["provider_version"] = "pixel-voxel-v45"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V45 N01 路线驱动侧向地形闭合候选：继承 V43 的雪脊、围栏权重、冷色光影、碰撞和路线，"
+        "针对录像中回头/侧转暴露的空灰背景，增加有限范围的左右近地肩部、远侧山脊和雪帽；"
+        "不使用整屏天空或背景卡片，不新增碰撞，仍需重新录制侧转路线确认。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_nature_lateral_terrain_closure"
+    manifest["quality_metrics"]["lighting_status"] = "candidate_outdoor_cool_daylight_v2"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = "outdoor_cool_daylight_v2"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V45 · N01 侧向地形闭合候选\n\n"
+        "根据 V43 路线录像补充有限范围侧向肩部与远侧山脊；不改变碰撞，不用背景卡片遮挡空区。质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+# V46 is a shared micro-surface precision pass across the five reviewed
+# samples.  The previous candidates had semantic anchors, but their surfaces
+# still read as large blocks at route distance.  This pass adds authored,
+# sparse micro-patterns to existing visible surfaces.  It deliberately does
+# not change camera, movement, collision or the photo-to-layout policy.
+PIXEL_V46_LAYOUT_VERSIONS = {
+    "corridor": "pixel-v46-i01-micro-surface-precision-pass-37",
+    "living": "pixel-v46-i02-micro-surface-precision-pass-37",
+    "nature": "pixel-v46-n01-micro-surface-precision-pass-37",
+    "street": "pixel-v46-s01-micro-surface-precision-pass-37",
+    "building": "pixel-v46-b01-micro-surface-precision-pass-37",
+}
+
+
+def _build_pixel_micro_surface_v46(
+    image_path: Path,
+    output_dir: Path,
+    scene_id: str,
+    base_builder,
+    profile: str,
+) -> dict[str, object]:
+    base_builder(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    sofa, plant = roles["sofa"], roles["plant"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    def add_xz(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    def add_yz(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_yz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    contour = _mix(dark, trim, 0.10)
+    light = _mix(window, lamp, 0.16)
+    mid = _mix(window, accent, 0.16)
+    shadow = _mix(floor, dark, 0.26)
+    generated_regions: list[str] = []
+
+    if profile == "corridor":
+        # Make the repeated windows and doors readable as small authored
+        # surfaces instead of flat coloured rectangles.
+        for index, z in enumerate((3.50, 0.0, -3.50, -7.0)):
+            add_yz(
+                f"pixel-q05-r46-i01-window-micro-grid-{index}",
+                (".aaaa.", "abbbba", "acccda", "abddba", ".aaaa."),
+                (-2.025, 1.62, z + 0.10), (0.050, 0.070), 0.012,
+                {"a": contour, "b": _mix(window, dark, 0.30), "c": mid, "d": light},
+                "window_micro_surface", "photo_supported_window_opening",
+            )
+            add_yz(
+                f"pixel-q05-r46-i01-door-micro-grid-{index}",
+                ("aaaaaa", "abbbba", "acccda", "abddba", "abbbba", "aaaaaa"),
+                (2.025, 1.48, z), (0.055, 0.11), 0.012,
+                {"a": contour, "b": _mix(wood, wall, 0.18), "c": _mix(wood, accent, 0.12), "d": light},
+                "door_micro_surface", "photo_supported_door_panel",
+            )
+        for row, z in enumerate((4.60, 3.45, 2.30, 1.15, 0.0, -1.15, -2.30, -3.45, -4.60, -5.75, -6.90, -8.05)):
+            for column, x in enumerate((-1.70, -1.05, -0.40, 0.25, 0.90, 1.55)):
+                add_detail(
+                    f"pixel-q05-r46-i01-floor-micro-glint-{row}-{column}", (0.075, 0.012, 0.035),
+                    (x, 0.247, z - 0.16), _mix(floor, window, 0.16 if (row + column) % 3 else 0.24),
+                    "floor_micro_surface", "photo_supported_floor_tile", MICRO_VOXEL,
+                )
+        generated_regions += ["corridor_window_micro_grids", "corridor_door_micro_grids", "corridor_floor_micro_glints"]
+        lighting_preset = "indoor_pixel_detail_v4"
+        note = "像素风 V46 I01 微表面精修候选：继承 V39 走廊结构、窗门层、碰撞和路线，增加窗门 0.015625 微网格及有序地砖高光；不改变路线。"
+        semantic_status = "candidate_corridor_micro_surface_precision"
+        authoring = "q05_i01_micro_surface_precision_pass"
+    elif profile == "living":
+        # The living room's large anchors receive material-specific micro
+        # marks: upholstery stitching, table top grain, console slats and
+        # plant highlights.  Empty surface remains intentional.
+        sofa_dark = _mix(sofa, trim, 0.42)
+        sofa_light = _mix(sofa, wall, 0.28)
+        for index, (x, z) in enumerate(((-2.78, -1.45), (-1.40, -1.45), (-0.10, -1.45))):
+            add_xy(
+                f"pixel-q05-r46-i02-sofa-micro-stitch-{index}",
+                (".aaaa.", "abbbba", "acccca", "abddba", "acccca", "abbbba", ".aaaa."),
+                (x, 1.52, z + 0.12), (0.045, 0.045), 0.012,
+                {"a": contour, "b": sofa_dark, "c": sofa_light, "d": _mix(sofa, accent, 0.14)},
+                "upholstery_micro_surface", "photo_supported_sectional_sofa",
+            )
+        add_xz(
+            "pixel-q05-r46-i02-tabletop-micro-grain",
+            ("..aaaa..", ".abbbba.", "abaccca", "abccc cba".replace(" ", ""), "abaccca", ".abbbba.", "..aaaa.."),
+            (1.25, 1.235, 0.55), (0.065, 0.065), 0.012,
+            {"a": contour, "b": _mix(wood, dark, 0.20), "c": _mix(wood, wall, 0.20)},
+            "table_micro_surface", "photo_supported_coffee_table",
+        )
+        for index, x in enumerate((2.30, 2.58, 2.86, 3.14)):
+            add_detail(
+                f"pixel-q05-r46-i02-console-micro-slat-{index}", (0.045, 0.34, 0.022),
+                (x, 0.62, -5.96), _mix(wood, dark, 0.28), "console_micro_surface", "photo_supported_tv_wall", MICRO_VOXEL,
+            )
+        for index, (x, y, z) in enumerate(((-3.92, 2.16, 0.44), (-3.68, 2.42, 0.44), (-3.34, 2.68, 0.44), (-3.04, 2.86, 0.44), (-3.55, 3.12, 0.44))):
+            add_detail(
+                f"pixel-q05-r46-i02-plant-micro-leaf-{index}", (0.22, 0.12, 0.12), (x, y, z), _mix(plant, lamp, 0.12 if index % 2 else 0.0),
+                "vegetation_micro_surface", "photo_supported_vegetation", MICRO_VOXEL,
+            )
+        generated_regions += ["living_upholstery_micro_stitches", "living_tabletop_micro_grain", "living_console_micro_slats", "living_plant_micro_leaves"]
+        lighting_preset = "indoor_pixel_detail_v4"
+        note = "像素风 V46 I02 微表面精修候选：继承 V38 客厅构图、材质层、光影、碰撞和路线，增加沙发缝线、桌面纹理、电视柜细条和植物微叶；不以体素数量替代语义。"
+        semantic_status = "candidate_living_micro_surface_precision"
+        authoring = "q05_i02_micro_surface_precision_pass"
+    elif profile == "nature":
+        # Mountain and lateral shoulders use sparse snow facets at different
+        # scales.  These are visible texture cues, not a blanket of random
+        # boxes and not new walkable/collision terrain.
+        snow_dark = _mix(window, dark, 0.40)
+        snow_mid = _mix(window, accent, 0.20)
+        snow_light = _mix(window, [255, 255, 248], 0.42)
+        for index, (x, y, z) in enumerate(((-7.8, 1.12, -1.8), (-7.8, 1.42, -4.8), (-7.8, 1.78, -7.9), (-7.8, 2.02, -11.0), (7.8, 1.12, -1.8), (7.8, 1.42, -4.8), (7.8, 1.78, -7.9), (7.8, 2.02, -11.0))):
+            add_xy(
+                f"pixel-q05-r46-n01-lateral-snow-micro-{index}",
+                (".aaa.", "abcca", "abdda", ".aaa."),
+                (x, y + 0.08, z), (0.070, 0.070), 0.014,
+                {"a": contour, "b": snow_dark, "c": snow_mid, "d": snow_light},
+                "lateral_terrain_micro_surface", "procedural_completion",
+            )
+        for index, z in enumerate((-7.2, -8.0, -8.8, -12.7, -13.5, -14.3, -17.0, -17.8)):
+            add_detail(
+                f"pixel-q05-r46-n01-horizon-snow-pixel-{index}", (0.38, 0.035, 0.045),
+                ((-4.6 + (index % 4) * 3.0), 2.22 - (index % 3) * 0.08, z), snow_light if index % 2 else snow_mid,
+                "mountain_micro_surface", "photo_supported_snow_ridge", MICRO_VOXEL,
+            )
+        generated_regions += ["lateral_shoulder_micro_facets", "horizon_snow_micro_pixels"]
+        lighting_preset = "outdoor_cool_daylight_v2"
+        note = "像素风 V46 N01 微表面精修候选：继承 V45 的路线驱动侧向地形闭合、雪脊、围栏、碰撞和路线，增加有限雪面微图案；不扩张为天空盒。"
+        semantic_status = "candidate_nature_micro_surface_precision"
+        authoring = "q05_n01_micro_surface_precision_pass"
+    elif profile == "street":
+        road_dark = _mix(floor, dark, 0.34)
+        road_light = _mix(floor, window, 0.20)
+        car_dark = _mix(metal, dark, 0.22)
+        car_glass = _mix(window, accent, 0.20)
+        for index, z in enumerate((5.8, 4.4, 3.0, 1.6, 0.2, -1.2, -2.6, -4.0, -5.4, -6.8, -8.2, -9.6)):
+            add_detail(
+                f"pixel-q05-r46-s01-road-micro-mark-{index}", (0.035, 0.018, 0.32 if index % 2 else 0.20),
+                (0.0, 0.272, z), road_dark, "road_micro_surface", "photo_supported_road_surface", MICRO_VOXEL,
+            )
+            add_detail(
+                f"pixel-q05-r46-s01-road-micro-glint-{index}", (0.11, 0.014, 0.022),
+                (0.32, 0.284, z - 0.18), road_light, "road_micro_surface", "photo_supported_road_surface", MICRO_VOXEL,
+            )
+        for index, (x, z, body) in enumerate(((-2.55, 1.2, wood), (2.65, -4.0, metal))):
+            add_xy(
+                f"pixel-q05-r46-s01-car-micro-face-{index}",
+                (".aaaa.", "abccba", "acddca", "abccba", ".aaaa."),
+                (x, 0.86, z + 1.37), (0.075, 0.055), 0.012,
+                {"a": car_dark, "b": _mix(body, car_glass, 0.18), "c": car_glass, "d": lamp},
+                "vehicle_micro_surface", "photo_supported_vehicle",
+            )
+        for side, x in (("left", -6.0), ("right", 6.0)):
+            for building_index, z in enumerate((3.6, -2.0, -7.6)):
+                for row_index, y in enumerate((1.30, 2.22, 3.14, 4.06)):
+                    add_xy(
+                        f"pixel-q05-r46-s01-{side}-window-micro-{building_index}-{row_index}",
+                        (".aa.", "abca", "acda", ".aa."),
+                        (x, y, z + 2.18), (0.070, 0.070), 0.010,
+                        {"a": contour, "b": _mix(window, wall, 0.12), "c": window, "d": _mix(window, lamp, 0.14)},
+                        "building_window_micro_surface", "photo_supported_window_line",
+                    )
+        generated_regions += ["road_micro_markings", "vehicle_micro_faces", "street_window_micro_surfaces"]
+        lighting_preset = "street_soft_daylight_v3"
+        note = "像素风 V46 S01 微表面精修候选：继承 V41 道路、车辆、窗格、树冠、碰撞和路线，增加道路微标记、车辆前脸微图案和侧面窗内像素。"
+        semantic_status = "candidate_street_micro_surface_precision"
+        authoring = "q05_s01_micro_surface_precision_pass"
+    else:
+        glass_dark = _mix(window, dark, 0.34)
+        glass_mid = _mix(window, accent, 0.18)
+        glass_high = _mix(window, lamp, 0.18)
+        warm = _mix(lamp, accent, 0.16)
+        window_specs = (
+            (-5.75, 1.20), (-3.75, 1.62), (-1.45, 1.18), (1.10, 1.64), (3.72, 1.20), (5.82, 1.82),
+            (-5.20, 3.45), (-2.80, 3.30), (-0.25, 3.66), (2.35, 3.18), (5.18, 3.58),
+            (-5.72, 5.62), (-3.35, 5.35), (-0.85, 5.74), (1.80, 5.42), (4.80, 5.78),
+            (-4.82, 7.55), (-2.15, 7.34), (0.55, 7.68), (3.38, 7.30), (5.82, 7.78),
+        )
+        for index, (x, y) in enumerate(window_specs):
+            add_xy(
+                f"pixel-q05-r46-b01-window-micro-core-{index}",
+                (".aaaa.", "abbbba", "acccda", "abddba", "abccba", ".aaaa."),
+                (x, y, -5.035), (0.048, 0.060), 0.010,
+                {"a": contour, "b": warm if index % 3 else glass_dark, "c": glass_mid, "d": glass_high},
+                "facade_window_micro_surface", "photo_supported_lit_window",
+            )
+        for index, y in enumerate((0.72, 2.78, 4.84, 6.90, 8.96)):
+            for segment, x in enumerate((-5.85, -3.90, -1.95, 0.0, 1.95, 3.90, 5.85)):
+                if (index + segment) % 2 == 0:
+                    add_detail(
+                        f"pixel-q05-r46-b01-facade-micro-joint-{index}-{segment}", (0.28, 0.018, 0.022),
+                        (x, y + 0.34, -5.055), _mix(trim, dark, 0.18), "facade_micro_surface", "photo_inferred_building_mass", MICRO_VOXEL,
+                    )
+        for index, (x, y) in enumerate(((-3.90, 2.42), (2.95, 3.98), (-2.55, 5.92), (4.35, 7.72), (-5.30, 8.58))):
+            for node in range(4):
+                add_detail(
+                    f"pixel-q05-r46-b01-balcony-micro-node-{index}-{node}", (0.025, 0.045, 0.018),
+                    (x - 0.48 + node * 0.32, y + 0.50, -4.56), _mix(window, lamp, 0.12 if node % 2 else 0.03),
+                    "balcony_micro_surface", "photo_supported_balcony_layer", MICRO_VOXEL,
+                )
+        generated_regions += ["facade_window_micro_cores", "facade_micro_joints", "balcony_micro_nodes"]
+        lighting_preset = "facade_blue_hour_v4"
+        note = "像素风 V46 B01 微表面精修候选：继承 V44 立面、窗内光、阳台节点、蓝调光影、碰撞和路线，增加窗内微核心、立面接缝和阳台微节点。"
+        semantic_status = "candidate_building_micro_surface_precision"
+        authoring = "q05_b01_micro_surface_precision_pass"
+
+    layout_version = PIXEL_V46_LAYOUT_VERSIONS[profile]
+    route_name = "pixel_style_sample_v46"
+    detail_pass = f"v46-{profile}-micro-surface-precision-pass-37"
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = authoring
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = lighting_preset
+    layout["pixel_spec"]["surface_density_policy"] = "sparse_semantic_micro_patterns_0_015625_no_uniform_noise"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v46"
+    manifest["provider_version"] = "pixel-voxel-v46"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = note
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = semantic_status
+    manifest["quality_metrics"]["lighting_status"] = f"candidate_{lighting_preset}"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = lighting_preset
+    manifest["pixel_spec"]["surface_density_policy"] = "sparse_semantic_micro_patterns_0_015625_no_uniform_noise"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        f"Luna 像素风样板 V46 · {profile} 微表面精修候选\n\n"
+        f"{note}\n新增微表面不参与碰撞；质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def build_pixel_corridor_v46(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r46-i01") -> dict[str, object]:
+    return _build_pixel_micro_surface_v46(image_path, output_dir, scene_id, build_pixel_corridor_v39, "corridor")
+
+
+def build_pixel_living_v46(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r46-i02") -> dict[str, object]:
+    return _build_pixel_micro_surface_v46(image_path, output_dir, scene_id, build_pixel_living_v38, "living")
+
+
+def build_pixel_nature_v46(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r46-n01") -> dict[str, object]:
+    return _build_pixel_micro_surface_v46(image_path, output_dir, scene_id, build_pixel_nature_v45, "nature")
+
+
+def build_pixel_street_v46(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r46-s01") -> dict[str, object]:
+    return _build_pixel_micro_surface_v46(image_path, output_dir, scene_id, build_pixel_street_v41, "street")
+
+
+def build_pixel_building_v46(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r46-b01") -> dict[str, object]:
+    return _build_pixel_micro_surface_v46(image_path, output_dir, scene_id, build_pixel_building_v44, "building")
+
+
+# V47 is still a Q03 visual-correction pass.  V46 increased local pixel
+# density, but the GPU start frames showed that several large surfaces still
+# read as unstructured blocks.  V47 adds a second, larger authored hierarchy:
+# panels, ledges, cornices, furniture separations and distant silhouette
+# bands.  It deliberately inherits V46 and never adds collision boxes.
+PIXEL_V47_LAYOUT_VERSIONS = {
+    "corridor": "pixel-v47-i01-semantic-surface-hierarchy-pass-38",
+    "living": "pixel-v47-i02-semantic-surface-hierarchy-pass-38",
+    "nature": "pixel-v47-n01-semantic-surface-hierarchy-pass-38",
+    "street": "pixel-v47-s01-semantic-surface-hierarchy-pass-38",
+    "building": "pixel-v47-b01-semantic-surface-hierarchy-pass-38",
+}
+
+
+def _build_pixel_semantic_surface_v47(
+    image_path: Path,
+    output_dir: Path,
+    scene_id: str,
+    base_builder,
+    profile: str,
+) -> dict[str, object]:
+    base_builder(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    sofa, plant = roles["sofa"], roles["plant"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+    generated_regions: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=FURNITURE_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source, grid=FURNITURE_VOXEL):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=grid)
+        details.append(prefix)
+
+    def add_xz(prefix, pattern, centre, cell, depth, colours, role, source, grid=FURNITURE_VOXEL):
+        _add_pattern_xz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=grid)
+        details.append(prefix)
+
+    def add_yz(prefix, pattern, centre, cell, depth, colours, role, source, grid=FURNITURE_VOXEL):
+        _add_pattern_yz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=grid)
+        details.append(prefix)
+
+    contour = _mix(dark, trim, 0.12)
+    shadow = _mix(dark, wall, 0.30)
+    warm = _mix(lamp, accent, 0.16)
+    cool = _mix(window, accent, 0.18)
+
+    if profile == "corridor":
+        # A repeated ceiling-light rhythm and wall wainscot break the long
+        # flat hallway planes while preserving its original direction.
+        for index, z in enumerate((4.20, 2.65, 1.10, -0.45, -2.00, -3.55, -5.10, -6.65, -8.20)):
+            add_detail(
+                f"pixel-q05-r47-i01-ceiling-light-housing-{index}", (0.34, 0.065, 0.16),
+                (0.0, 3.01, z), contour, "ceiling_light_structure", "photo_supported_ceiling_fixture",
+            )
+            add_detail(
+                f"pixel-q05-r47-i01-ceiling-light-core-{index}", (0.19, 0.018, 0.08),
+                (0.0, 2.96, z), warm, "ceiling_light_detail", "photo_supported_ceiling_fixture", MICRO_VOXEL,
+            )
+        for side, x in (("left", -2.62), ("right", 2.62)):
+            add_detail(
+                f"pixel-q05-r47-i01-{side}-wainscot-rail", (0.055, 0.26, 12.70),
+                (x, 0.70, -1.45), _mix(trim, wall, 0.16), "wall_panel_structure", "photo_supported_wall_rail",
+            )
+            for index, z in enumerate((3.15, 0.25, -2.65, -5.55)):
+                add_detail(
+                    f"pixel-q05-r47-i01-{side}-wall-panel-break-{index}", (0.035, 0.62, 0.86),
+                    (x + (0.04 if side == "left" else -0.04), 1.20, z), shadow, "wall_panel_detail", "photo_inferred_wall_panel", MICRO_VOXEL,
+                )
+        generated_regions += ["corridor_ceiling_light_rhythm", "corridor_wainscot_structure", "corridor_wall_panel_breaks"]
+        lighting_preset = "indoor_pixel_detail_v4"
+        note = "像素风 V47 I01 语义表面层次候选：继承 V46，增加吊顶灯具节奏、墙裙导轨和分段墙面层次；不改变碰撞与路线。"
+        semantic_status = "candidate_corridor_semantic_surface_hierarchy"
+        authoring = "q05_i01_semantic_surface_hierarchy_pass"
+    elif profile == "living":
+        # Add readable object separation around the photographed room's main
+        # anchors: cushions, media wall, curtain rhythm and table edges.
+        for index, (x, z) in enumerate(((-2.78, -1.45), (-1.40, -1.45), (-0.10, -1.45))):
+            add_detail(
+                f"pixel-q05-r47-i02-sofa-back-cushion-{index}", (0.92, 0.48, 0.10),
+                (x, 1.78, z + 0.32), _mix(sofa, wall, 0.18), "upholstery_structure", "photo_supported_sectional_sofa",
+            )
+            add_detail(
+                f"pixel-q05-r47-i02-sofa-seat-break-{index}", (0.72, 0.035, 0.045),
+                (x, 1.10, z - 0.08), contour, "upholstery_seam_detail", "photo_supported_sectional_sofa", MICRO_VOXEL,
+            )
+        for index, x in enumerate((-3.70, -3.25, -2.80, -2.35, -1.90, -1.45, -1.00, -0.55, -0.10)):
+            add_detail(
+                f"pixel-q05-r47-i02-curtain-fold-{index}", (0.045, 2.05, 0.025),
+                (x, 2.10, -6.24), _mix(wall, window, 0.10 + (index % 2) * 0.08), "curtain_surface_detail", "photo_supported_window_covering", MICRO_VOXEL,
+            )
+        add_xy(
+            "pixel-q05-r47-i02-media-wall-panel",
+            ("aaaaaaaaaaaaaaaa", "abbbbbbbbbbbbbba", "abacccccccccccba", "abacddddddddd cba".replace(" ", ""), "abacccccccccccba", "abbbbbbbbbbbbbba", "aaaaaaaaaaaaaaaa"),
+            (-2.58, 1.62, -6.02), (0.12, 0.12), 0.020,
+            {"a": contour, "b": shadow, "c": cool, "d": warm}, "media_wall_pixel_surface", "photo_supported_tv_wall", FURNITURE_VOXEL,
+        )
+        for index, x in enumerate((0.48, 0.96, 1.44, 1.92, 2.40, 2.88)):
+            add_detail(
+                f"pixel-q05-r47-i02-media-console-separation-{index}", (0.035, 0.40, 0.055),
+                (x, 0.68, -5.98), contour, "media_console_structure", "photo_supported_tv_wall", MICRO_VOXEL,
+            )
+        generated_regions += ["living_cushion_separation", "living_curtain_fold_rhythm", "living_media_wall_panel", "living_console_separation"]
+        lighting_preset = "indoor_pixel_detail_v4"
+        note = "像素风 V47 I02 语义表面层次候选：继承 V46，增加沙发靠垫分件、窗帘折线、电视墙面板和电视柜分隔；不改变碰撞与路线。"
+        semantic_status = "candidate_living_semantic_surface_hierarchy"
+        authoring = "q05_i02_semantic_surface_hierarchy_pass"
+    elif profile == "nature":
+        # The previous start frame had a readable walkable snowfield but a
+        # broad low-information horizon.  These stepped, multi-scale ridge
+        # bands restore a pixel-art mountain silhouette without creating a
+        # fake skybox or changing the walkable ground.
+        ridge_specs = (
+            ("far", -18.0, 3.40, 0.34, _mix(window, dark, 0.38)),
+            ("middle", -15.4, 2.72, 0.28, _mix(window, accent, 0.18)),
+            ("near", -12.8, 2.18, 0.22, _mix(window, [255, 255, 248], 0.32)),
+        )
+        ridge_patterns = (
+            ("..aa....bb....aa..", ".abbb..abbbba..bbba.", "abccccabccddccabccba", "abccccccccccccccccba", "..abbbbbbbbbbbbbba.."),
+            ("...aa..bbb..aa...", ".abbb.abccba.bbbba.", "abcccccccccccccccba", "..abbbbbbbbbbbbbba.."),
+            ("....aa..bb..aa....", ".abbbabccccabbbba.", "abccccccccccccccba", "..abbbbbbbbbbbbba.."),
+        )
+        for (name, z, y, cell_size, colour), pattern in zip(ridge_specs, ridge_patterns):
+            add_xz(
+                f"pixel-q05-r47-n01-{name}-ridge-silhouette", pattern, (0.0, y, z), (cell_size, cell_size), 0.028,
+                {"a": contour, "b": colour, "c": _mix(colour, window, 0.18), "d": _mix(colour, [255, 255, 248], 0.28)},
+                "mountain_silhouette_surface", "photo_supported_snow_ridge", FURNITURE_VOXEL,
+            )
+        for index, x in enumerate((-6.0, -4.5, -3.0, -1.5, 0.0, 1.5, 3.0, 4.5, 6.0)):
+            add_detail(
+                f"pixel-q05-r47-n01-near-snow-contour-{index}", (0.72, 0.035, 0.075),
+                (x, 1.06 + (index % 3) * 0.06, -6.4 - (index % 2) * 0.42), _mix(window, [255, 255, 248], 0.24),
+                "snow_surface_contour", "photo_supported_snowfield", MICRO_VOXEL,
+            )
+        generated_regions += ["nature_far_middle_near_ridge_silhouettes", "nature_snow_surface_contours"]
+        lighting_preset = "outdoor_cool_daylight_v2"
+        note = "像素风 V47 N01 语义表面层次候选：继承 V46，增加远中近三层阶梯山脊剪影与近地雪面等高线；不新增地形碰撞、不扩张为天空盒。"
+        semantic_status = "candidate_nature_semantic_surface_hierarchy"
+        authoring = "q05_n01_semantic_surface_hierarchy_pass"
+    elif profile == "street":
+        # The street scene needs a clearer façade cadence and road hierarchy;
+        # the added parts sit on existing masses and stay outside collision.
+        for side, x in (("left", -5.90), ("right", 5.90)):
+            for band, y in enumerate((1.04, 2.02, 3.00, 3.98, 4.96)):
+                add_detail(
+                    f"pixel-q05-r47-s01-{side}-facade-cornice-{band}", (0.045, 0.055, 12.20),
+                    (x, y, -1.70), _mix(trim, dark, 0.18), "street_facade_structure", "photo_inferred_building_mass", MICRO_VOXEL,
+                )
+            for building, z in enumerate((3.60, -2.00, -7.60)):
+                add_yz(
+                    f"pixel-q05-r47-s01-{side}-shop-window-grid-{building}",
+                    ("aaaaaa", "abccba", "acddca", "abccba", "aaaaaa"), (x, 2.46, z + 2.22), (0.20, 0.18), 0.018,
+                    {"a": contour, "b": _mix(window, wall, 0.12), "c": cool, "d": warm},
+                    "street_shop_window_surface", "photo_supported_window_line", FURNITURE_VOXEL,
+                )
+        for index, x in enumerate((-3.84, -2.56, -1.28, 0.0, 1.28, 2.56, 3.84)):
+            add_detail(
+                f"pixel-q05-r47-s01-crosswalk-pixel-{index}", (0.46, 0.020, 0.16),
+                (x, 0.29, 1.62), _mix(window, floor, 0.16), "road_marking_surface", "photo_supported_road_surface", MICRO_VOXEL,
+            )
+        generated_regions += ["street_facade_cornice_cadence", "street_shop_window_grids", "street_crosswalk_surface"]
+        lighting_preset = "street_soft_daylight_v3"
+        note = "像素风 V47 S01 语义表面层次候选：继承 V46，增加两侧建筑檐口节奏、店面窗格和道路横向标线；不改变道路碰撞与出生点。"
+        semantic_status = "candidate_street_semantic_surface_hierarchy"
+        authoring = "q05_s01_semantic_surface_hierarchy_pass"
+    else:
+        # The building frame already has many windows, but its large façade
+        # fields need depth breaks so that side turns do not read as one slab.
+        for band, y in enumerate((0.58, 2.58, 4.58, 6.58, 8.58)):
+            add_detail(
+                f"pixel-q05-r47-b01-facade-horizontal-ledge-{band}", (12.40, 0.055, 0.10),
+                (0.0, y, -4.96), _mix(trim, dark, 0.22), "facade_depth_structure", "photo_inferred_building_mass", FURNITURE_VOXEL,
+            )
+        for index, x in enumerate((-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 6.0)):
+            add_detail(
+                f"pixel-q05-r47-b01-facade-pilaster-{index}", (0.075, 8.40, 0.10),
+                (x, 4.52, -4.96), _mix(trim, wall, 0.12), "facade_depth_structure", "photo_inferred_building_mass", FURNITURE_VOXEL,
+            )
+        for index, (x, y) in enumerate(((-5.72, 1.20), (-3.75, 3.30), (-1.45, 5.42), (1.10, 3.18), (3.72, 5.40), (5.82, 7.38))):
+            add_yz(
+                f"pixel-q05-r47-b01-window-recess-shadow-{index}",
+                ("aaaa", "abca", "acda", "abca", "aaaa"), (x, y, -5.08), (0.12, 0.15), 0.026,
+                {"a": shadow, "b": cool, "c": glass_mid if "glass_mid" in locals() else window, "d": warm},
+                "facade_window_recess", "photo_supported_lit_window", FURNITURE_VOXEL,
+            )
+        generated_regions += ["facade_horizontal_ledge_depth", "facade_vertical_pilaster_rhythm", "facade_window_recess_shadows"]
+        lighting_preset = "facade_blue_hour_v4"
+        note = "像素风 V47 B01 语义表面层次候选：继承 V46，增加立面横向檐口、竖向分格和窗洞阴影；不改变外部路线与碰撞。"
+        semantic_status = "candidate_building_semantic_surface_hierarchy"
+        authoring = "q05_b01_semantic_surface_hierarchy_pass"
+
+    layout_version = PIXEL_V47_LAYOUT_VERSIONS[profile]
+    route_name = "pixel_style_sample_v47"
+    detail_pass = f"v47-{profile}-semantic-surface-hierarchy-pass-38"
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = authoring
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = lighting_preset
+    layout["pixel_spec"]["surface_density_policy"] = "semantic_surface_hierarchy_on_v46_no_uniform_noise"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v47"
+    manifest["provider_version"] = "pixel-voxel-v47"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = note
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = semantic_status
+    manifest["quality_metrics"]["lighting_status"] = f"candidate_{lighting_preset}"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = lighting_preset
+    manifest["pixel_spec"]["surface_density_policy"] = "semantic_surface_hierarchy_on_v46_no_uniform_noise"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        f"Luna 像素风样板 V47 · {profile} 语义表面层次候选\n\n"
+        f"{note}\n新增表面层不参与碰撞；质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def build_pixel_corridor_v47(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r47-i01") -> dict[str, object]:
+    return _build_pixel_semantic_surface_v47(image_path, output_dir, scene_id, build_pixel_corridor_v46, "corridor")
+
+
+def build_pixel_living_v47(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r47-i02") -> dict[str, object]:
+    return _build_pixel_semantic_surface_v47(image_path, output_dir, scene_id, build_pixel_living_v46, "living")
+
+
+def build_pixel_nature_v47(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r47-n01") -> dict[str, object]:
+    return _build_pixel_semantic_surface_v47(image_path, output_dir, scene_id, build_pixel_nature_v46, "nature")
+
+
+def build_pixel_street_v47(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r47-s01") -> dict[str, object]:
+    return _build_pixel_semantic_surface_v47(image_path, output_dir, scene_id, build_pixel_street_v46, "street")
+
+
+def build_pixel_building_v47(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r47-b01") -> dict[str, object]:
+    return _build_pixel_semantic_surface_v47(image_path, output_dir, scene_id, build_pixel_building_v46, "building")

@@ -35,6 +35,24 @@ from app.services.pixel_scene import (
     build_pixel_street_v41,
     PIXEL_V42_LAYOUT_VERSION,
     build_pixel_building_v42,
+    PIXEL_V43_LAYOUT_VERSION,
+    build_pixel_nature_v43,
+    PIXEL_V44_LAYOUT_VERSION,
+    build_pixel_building_v44,
+    PIXEL_V45_LAYOUT_VERSION,
+    build_pixel_nature_v45,
+    PIXEL_V46_LAYOUT_VERSIONS,
+    build_pixel_corridor_v46,
+    build_pixel_living_v46,
+    build_pixel_nature_v46,
+    build_pixel_street_v46,
+    build_pixel_building_v46,
+    PIXEL_V47_LAYOUT_VERSIONS,
+    build_pixel_corridor_v47,
+    build_pixel_living_v47,
+    build_pixel_nature_v47,
+    build_pixel_street_v47,
+    build_pixel_building_v47,
 )
 
 
@@ -348,3 +366,97 @@ def test_pixel_v42_building_adds_facade_light_layers_without_new_collision(tmp_p
     assert "facade_contour" in roles
     assert "facade_window_pixel_surface" in roles
     assert "balcony_light_detail" in roles
+
+
+def test_pixel_v43_nature_rebalances_fence_and_keeps_collision_contract(tmp_path: Path):
+    source = tmp_path / "nature.png"
+    Image.new("RGB", (48, 32), (184, 205, 226)).save(source)
+    output = tmp_path / "nature-v43"
+
+    manifest = build_pixel_nature_v43(source, output, "pixel-v43-n01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    ids = {item["id"] for item in layout["objects"]}
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v43"
+    assert manifest["layout_version"] == PIXEL_V43_LAYOUT_VERSION
+    assert len(manifest["movement"]["collision_boxes"]) == 3
+    assert "pixel-q05-r22-n01-fence-rail-1" not in ids
+    assert "pixel-q05-r22-n01-fence-rail-2" not in ids
+    assert "mountain_ridge_contour" in roles
+    assert "snow_surface_detail" in roles
+
+
+def test_pixel_v44_building_switches_only_to_brighter_blue_hour_preset(tmp_path: Path):
+    source = tmp_path / "building.png"
+    Image.new("RGB", (48, 32), (18, 26, 54)).save(source)
+    output = tmp_path / "building-v44"
+
+    manifest = build_pixel_building_v44(source, output, "pixel-v44-b01-test")
+
+    assert manifest["style_route"] == "pixel_style_sample_v44"
+    assert manifest["layout_version"] == PIXEL_V44_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "facade_blue_hour_v4"
+    assert len(manifest["movement"]["collision_boxes"]) == 1
+
+
+def test_pixel_v45_nature_adds_bounded_lateral_terrain_without_collision_change(tmp_path: Path):
+    source = tmp_path / "nature.png"
+    Image.new("RGB", (48, 32), (184, 205, 226)).save(source)
+    output = tmp_path / "nature-v45"
+
+    manifest = build_pixel_nature_v45(source, output, "pixel-v45-n01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v45"
+    assert manifest["layout_version"] == PIXEL_V45_LAYOUT_VERSION
+    assert len(manifest["movement"]["collision_boxes"]) == 3
+    assert "lateral_terrain_mass" in roles
+    assert "lateral_ridge_mass" in roles
+
+
+def test_pixel_v46_micro_surface_pass_covers_five_profiles_without_new_collision(tmp_path: Path):
+    source = tmp_path / "source.png"
+    Image.new("RGB", (48, 32), (190, 200, 210)).save(source)
+    cases = (
+        ("corridor", build_pixel_corridor_v46, 6, "window_micro_surface"),
+        ("living", build_pixel_living_v46, 8, "upholstery_micro_surface"),
+        ("nature", build_pixel_nature_v46, 3, "lateral_terrain_micro_surface"),
+        ("street", build_pixel_street_v46, 11, "vehicle_micro_surface"),
+        ("building", build_pixel_building_v46, 1, "facade_window_micro_surface"),
+    )
+    for profile, builder, collision_count, expected_role in cases:
+        output = tmp_path / profile
+        manifest = builder(source, output, f"pixel-v46-{profile}-test")
+        layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+        roles = {item["role"] for item in layout["objects"]}
+        assert manifest["style_route"] == "pixel_style_sample_v46"
+        assert manifest["layout_version"] == PIXEL_V46_LAYOUT_VERSIONS["living" if profile == "living" else profile]
+        assert len(manifest["movement"]["collision_boxes"]) == collision_count
+        assert expected_role in roles
+
+
+def test_pixel_v47_semantic_surface_hierarchy_keeps_five_collision_contracts(tmp_path: Path):
+    source = tmp_path / "source-v47.png"
+    Image.new("RGB", (48, 32), (190, 200, 210)).save(source)
+    cases = (
+        ("corridor", build_pixel_corridor_v47, 6),
+        ("living", build_pixel_living_v47, 8),
+        ("nature", build_pixel_nature_v47, 3),
+        ("street", build_pixel_street_v47, 11),
+        ("building", build_pixel_building_v47, 1),
+    )
+    for profile, builder, collision_count in cases:
+        output = tmp_path / f"v47-{profile}"
+        manifest = builder(source, output, f"pixel-v47-{profile}-test")
+        layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+        collision = json.loads((output / "collision.json").read_text(encoding="utf-8"))
+        roles = {item["role"] for item in layout["objects"]}
+        assert manifest["style_route"] == "pixel_style_sample_v47"
+        assert manifest["layout_version"] == PIXEL_V47_LAYOUT_VERSIONS[profile]
+        assert len(manifest["movement"]["collision_boxes"]) == collision_count
+        assert layout["movement"]["collision_boxes"] == collision["boxes"]
+        assert manifest["quality_status"] == "unverified"
+        assert manifest["detail_object_ids"]
+        assert any(role.endswith("structure") or role.endswith("surface") for role in roles)
