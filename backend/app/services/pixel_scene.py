@@ -6386,3 +6386,174 @@ def build_pixel_living_v37(image_path: Path, output_dir: Path, scene_id: str = "
         encoding="utf-8",
     )
     return manifest
+
+
+# V38 translates the supplied pixel-art references into a denser surface
+# language: dark contour pixels, limited shade steps, repeated material motifs
+# and a small number of semantic light sources.  It inherits V37's composition
+# and collision contract, so this remains a visual candidate rather than a
+# silent layout rewrite.
+PIXEL_V38_LAYOUT_VERSION = "pixel-v38-i02-pixel-material-light-pass-32"
+
+
+def build_pixel_living_v38(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r38-i02") -> dict[str, object]:
+    build_pixel_living_v37(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    sofa, plant = roles["sofa"], roles["plant"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    def add_xz(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    contour = _mix(dark, trim, 0.10)
+    sofa_shadow = _mix(sofa, trim, 0.38)
+    sofa_mid = _mix(sofa, wall, 0.18)
+    sofa_light = _mix(sofa, [255, 250, 236], 0.20)
+
+    # A dark one-pixel contour and three value steps make the sectional read
+    # like authored pixel art rather than several unconnected beige boxes.
+    for index, (x, z, width) in enumerate(((-2.78, -1.45, 1.20), (-1.40, -1.45, 1.20), (-0.10, -1.45, 0.72))):
+        add_detail(f"pixel-q05-r38-i02-sofa-contour-top-{index}", (width + 0.10, 0.035, 0.045), (x, 1.86, z), contour, "upholstery_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+        add_detail(f"pixel-q05-r38-i02-sofa-contour-side-{index}", (0.045, 0.72, 0.045), (x - width * 0.52, 1.48, z - 0.12), contour, "upholstery_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+        add_xy(
+            f"pixel-q05-r38-i02-sofa-fabric-grid-{index}",
+            ("..aaaaaaaa..", ".abbbbbbbba.", "abacccccaba", "abcccccc cba".replace(" ", ""), "abacccccaba", ".abbbbbbbba.", "..aaaaaaaa.."),
+            (x, 1.48, z + 0.12), (0.075, 0.075), 0.018,
+            {"a": contour, "b": sofa_shadow, "c": sofa_light},
+            "upholstery_pixel_surface", "photo_supported_sectional_sofa",
+        )
+    # Small dark breaks separate cushions without adding random noise.
+    for index, x in enumerate((-2.10, -0.72)):
+        add_detail(f"pixel-q05-r38-i02-sofa-cushion-break-{index}", (0.035, 0.58, 0.06), (x, 1.38, -1.30), contour, "upholstery_seam_detail", "pixel_style_material_break", MICRO_VOXEL)
+
+    # The coffee table gets a compact radial-ish pixel motif and a warm rim;
+    # the pattern is flat and low cost but gives the reference-style focal
+    # object a readable highlight/shadow hierarchy.
+    table_dark = _mix(wood, dark, 0.28)
+    table_mid = _mix(wood, wall, 0.24)
+    table_high = _mix(lamp, wall, 0.16)
+    add_xz(
+        "pixel-q05-r38-i02-table-pixel-inlay",
+        ("...aaaa...", ".abbbbbba.", "abacccaba", "abccccbba", "abacccaba", ".abbbbbba.", "...aaaa..."),
+        (1.25, 1.18, 0.55), (0.12, 0.10), 0.016,
+        {"a": table_dark, "b": table_mid, "c": table_high},
+        "table_pixel_surface", "photo_supported_coffee_table",
+    )
+    add_detail("pixel-q05-r38-i02-table-warm-rim", (1.62, 0.035, 0.04), (1.25, 1.23, 0.55), table_high, "table_light_detail", "pixel_style_semantic_light_source", MICRO_VOXEL)
+    for index, x in enumerate((1.08, 1.25, 1.42)):
+        add_detail(f"pixel-q05-r38-i02-table-base-contour-{index}", (0.04, 0.44, 0.24), (x, 0.70, 0.55), contour, "table_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+
+    # Floor and rug receive a controlled checker/stripe cadence like the
+    # supplied references, with enough empty space to preserve readability.
+    rug_shadow = _mix(floor, trim, 0.30)
+    rug_light = _mix(floor, sofa, 0.16)
+    add_xz(
+        "pixel-q05-r38-i02-rug-pixel-weave",
+        ("aabbbbbbaa", "abccccc cba".replace(" ", ""), "bccddccddb", "abccccc cba".replace(" ", ""), "aabbbbbbaa"),
+        (0.05, 0.29, 0.34), (0.20, 0.14), 0.014,
+        {"a": rug_shadow, "b": rug_light, "c": _mix(rug_light, accent, 0.10), "d": _mix(rug_shadow, trim, 0.25)},
+        "rug_pixel_surface", "photo_supported_rug",
+    )
+    for row, z in enumerate((1.40, 0.80, 0.20, -0.40, -1.00)):
+        add_detail(f"pixel-q05-r38-i02-floor-reflection-band-{row}", (2.20, 0.012, 0.028), (0.15, 0.235, z), _mix(floor, window, 0.14 if row % 2 else 0.08), "floor_reflection_detail", "photo_supported_floor_light", MICRO_VOXEL)
+
+    # The TV and rear opening use small bright pixels rather than global
+    # emissive lift.  This is the same semantic-light rule used by the
+    # reference-style night scenes, adapted to the photographed living room.
+    screen_dark = _mix(dark, trim, 0.16)
+    screen_mid = _mix(window, accent, 0.34)
+    screen_light = _mix(screen_mid, lamp, 0.24)
+    add_xy(
+        "pixel-q05-r38-i02-tv-dense-screen-grid",
+        ("..aaaaaaaaaaaa..", ".abbbbbbbbbbbba.", "abacccccc caba".replace(" ", ""), "abacccccc caba".replace(" ", ""), ".abbbbbbbbbbbba.", "..aaaaaaaaaaaa.."),
+        (-2.58, 2.04, -5.98), (0.075, 0.075), 0.018,
+        {"a": screen_dark, "b": screen_mid, "c": screen_light},
+        "display_pixel_surface", "photo_supported_tv_wall",
+    )
+    for index, x in enumerate((-2.00, -1.64, -1.28, -0.92, -0.56)):
+        add_detail(f"pixel-q05-r38-i02-tv-status-pixel-{index}", (0.055, 0.035, 0.018), (x, 1.33, -5.94), lamp if index == 2 else screen_light, "display_light_detail", "pixel_style_semantic_light_source", MICRO_VOXEL)
+    for index, x in enumerate((0.36, 0.70, 1.04, 1.38, 2.10, 2.44, 2.78, 3.12)):
+        add_detail(f"pixel-q05-r38-i02-window-light-pixel-{index}", (0.035, 0.08, 0.025), (x, 2.34 + (index % 2) * 0.18, -6.30), _mix(window, lamp, 0.22), "window_light_detail", "pixel_style_semantic_light_source", MICRO_VOXEL)
+
+    # Plant leaves are layered into dark/mid/high clusters so the silhouette
+    # reads at a glance while staying an actual 3D object, not a billboard.
+    leaf_dark = _shade(plant, 0.58)
+    leaf_mid = plant
+    leaf_high = _mix(plant, lamp, 0.18)
+    for index, (x, y, z, colour) in enumerate((
+        (-4.08, 2.08, 0.44, leaf_dark), (-3.88, 2.36, 0.44, leaf_mid),
+        (-3.58, 2.58, 0.44, leaf_high), (-3.22, 2.82, 0.44, leaf_mid),
+        (-3.00, 3.10, 0.44, leaf_dark), (-3.52, 3.28, 0.44, leaf_high),
+    )):
+        add_detail(f"pixel-q05-r38-i02-plant-pixel-leaf-{index}", (0.32, 0.16, 0.16), (x, y, z), colour, "vegetation_pixel_surface", "photo_supported_vegetation", FURNITURE_VOXEL)
+
+    layout_version = PIXEL_V38_LAYOUT_VERSION
+    detail_pass = "v38-i02-pixel-material-light-pass-32"
+    route_name = "pixel_style_sample_v38"
+    generated_regions = [
+        "pixel_contour_hierarchy", "micro_fabric_grid", "table_pixel_inlay",
+        "rug_pixel_weave", "semantic_tv_light_pixels", "window_light_pixels",
+        "layered_plant_pixel_leaves",
+    ]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_i02_pixel_material_and_light_pass"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = "indoor_pixel_detail_v4"
+    layout["pixel_spec"]["surface_density_policy"] = "micro_pixel_material_steps_and_dark_contours_no_uniform_noise"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v38"
+    manifest["provider_version"] = "pixel-voxel-v38"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V38 I02 微像素材质与光影候选：继承 V37 的照片锚点构图、碰撞和路线，"
+        "增加深色轮廓、微像素织物/地毯/桌面纹理、电视与窗光语义像素、植物明暗层，"
+        "并使用独立室内像素光影预设；不使用整图投影。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_pixel_material_light_hierarchy"
+    manifest["quality_metrics"]["lighting_status"] = "candidate_indoor_pixel_detail_v4"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = "indoor_pixel_detail_v4"
+    manifest["pixel_spec"]["surface_density_policy"] = "micro_pixel_material_steps_and_dark_contours_no_uniform_noise"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V38 · I02 微像素材质与光影候选\n\n"
+        "增加参考图方向的深色轮廓、有限色阶、微像素表面和局部语义光点；布局、碰撞和移动保持继承。\n"
+        "质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest

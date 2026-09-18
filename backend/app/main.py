@@ -60,6 +60,7 @@ const lightingPreset=manifest.pixel_spec?.lighting_preset||'neutral';const light
   indoor_warm_window:{background:'#293044',sky:'#fff3da',ground:'#4d5262',hemi:0.92,ambient:0.58,key:'#ffd39a',keyIntensity:1.55,fill:'#9ab8db',fillIntensity:0.28,shadows:true,emissiveLift:0.018},
   indoor_warm_window_v2:{background:'#252b3d',sky:'#fff0d0',ground:'#454858',hemi:0.70,ambient:0.36,key:'#ffd09a',keyIntensity:1.82,fill:'#9bb8d8',fillIntensity:0.16,shadows:true,emissiveLift:0.006},
   indoor_pixel_cozy_v3:{background:'#20283a',sky:'#fff1d6',ground:'#383d4a',hemi:0.48,ambient:0.22,key:'#ffd09a',keyIntensity:2.18,fill:'#7999bd',fillIntensity:0.08,shadows:true,emissiveLift:0.004},
+  indoor_pixel_detail_v4:{background:'#1b2437',sky:'#ffe8bd',ground:'#353a48',hemi:0.58,ambient:0.28,key:'#ffd39b',keyIntensity:2.02,fill:'#86a9c9',fillIntensity:0.14,shadows:true,emissiveLift:0.008},
   outdoor_cool_daylight:{background:'#7694aa',sky:'#d9efff',ground:'#6d7d87',hemi:1.25,ambient:0.68,key:'#e8f5ff',keyIntensity:1.45,fill:'#9fc6e6',fillIntensity:0.18,shadows:true,emissiveLift:0.008},
   outdoor_cool_daylight_v2:{background:'#647f98',sky:'#e7f4ff',ground:'#526b7d',hemi:0.84,ambient:0.34,key:'#f4fbff',keyIntensity:1.78,fill:'#86acd1',fillIntensity:0.10,shadows:true,emissiveLift:0.004},
   street_soft_daylight:{background:'#273244',sky:'#e4eef3',ground:'#626c70',hemi:1.10,ambient:0.66,key:'#fff2d5',keyIntensity:1.30,fill:'#9fc5dc',fillIntensity:0.24,shadows:true,emissiveLift:0.012},

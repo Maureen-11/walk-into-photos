@@ -25,6 +25,8 @@ from app.services.pixel_scene import (
     build_pixel_living_v36,
     PIXEL_V37_LAYOUT_VERSION,
     build_pixel_living_v37,
+    PIXEL_V38_LAYOUT_VERSION,
+    build_pixel_living_v38,
 )
 
 
@@ -248,3 +250,21 @@ def test_pixel_v37_living_composition_adds_anchor_group_without_new_collision(tm
     assert "pixel-q05-r37-i02-sectional-front-base" in ids
     assert any(item.startswith("pixel-q05-r37-i02-rug-centre-weave") for item in ids)
     assert "pixel-q05-r37-i02-tv-wall-lower-edge" in ids
+
+
+def test_pixel_v38_adds_pixel_material_hierarchy_without_changing_collision(tmp_path: Path):
+    source = tmp_path / "living.png"
+    Image.new("RGB", (48, 32), (235, 236, 232)).save(source)
+    output = tmp_path / "living-v38"
+
+    manifest = build_pixel_living_v38(source, output, "pixel-v38-i02-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v38"
+    assert manifest["layout_version"] == PIXEL_V38_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "indoor_pixel_detail_v4"
+    assert len(manifest["movement"]["collision_boxes"]) == 8
+    assert "upholstery_pixel_surface" in roles
+    assert "rug_pixel_surface" in roles
+    assert "display_light_detail" in roles
