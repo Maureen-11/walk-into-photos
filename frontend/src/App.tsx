@@ -58,7 +58,9 @@ type Job = {
 };
 type Movement = { kind: string; start: number[]; bounds: Record<string, number[]>; walk_speed: number; fly_speed: number; allow_flight: boolean; ground_follow?: boolean; ground_y?: number; collision_radius?: number; collision_boxes?: { box_id: string; bounds: { x?: number[]; z?: number[] }; label?: string }[]; route_checkpoints?: number[][] };
 type CameraSpec = { position: number[]; intrinsics?: number[][]; image_size?: number[]; camera_to_world?: number[][]; world_scale: number; near: number; far: number; fov_x?: number; fov_y?: number; coordinate_frame_id: string };
-type Manifest = { scene_id: string; scene_url: string; export_url: string; version: string; template: Template; engine?: string; movement: Movement; camera?: CameraSpec; source_url?: string; generated_region_note: string; mock: boolean; experience_kind?: ExperienceKind; actions?: Action[]; subject_regions?: SubjectRegion[]; capability_status?: Action["status"]; coverage?: number | null; quality_status?: string; quality_metrics?: Record<string, unknown>; input_sha256?: string; provider_version?: string; coordinate_frame_id?: string; resource_manifest?: string[]; collision_resource?: string; acceptance_evidence?: string[]; generation_source?: string; fallback_reason?: string; layout_version?: string; estimated_scale?: number; quality_route?: boolean; manual_assisted?: boolean; manual_region_sha256?: string; photo_supported_regions?: string[]; generated_regions?: string[] };
+type Manifest = { scene_id: string; scene_url: string; export_url: string; version: string; template: Template; engine?: string; movement: Movement; camera?: CameraSpec; source_url?: string; generated_region_note: string; mock: boolean; experience_kind?: ExperienceKind; actions?: Action[]; subject_regions?: SubjectRegion[]; capability_status?: Action["status"]; coverage?: number | null; quality_status?: string; quality_metrics?: Record<string, unknown>; input_sha256?: string; provider_version?: string; coordinate_frame_id?: string; resource_manifest?: string[]; collision_resource?: string; acceptance_evidence?: string[]; generation_source?: string; fallback_reason?: string; layout_version?: string; estimated_scale?: number; quality_route?: boolean; manual_assisted?: boolean; manual_region_sha256?: string; photo_supported_regions?: string[]; generated_regions?: string[]; pixel_spec?: { lighting_preset?: string; [key: string]: unknown } };
+type RouteInputEvent = { at_ms: number; type: "keydown" | "keyup" | "blur" | "visibilitychange" | "reset"; key?: string; position: number[]; yaw: number; pitch: number; keys: string[] };
+type RouteFrameSample = { at_ms: number; delta_ms: number; position: number[]; yaw: number; pitch: number; keys: string[] };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const apiUrl = (path: string) => path.startsWith("http://") || path.startsWith("https://") ? path : `${API_BASE_URL}${path}`;
@@ -70,15 +72,43 @@ const api = async (url: string, init?: RequestInit) => {
   return body;
 };
 
-function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, active }: { objectUrl: string; manifest: Manifest; lookRef: React.MutableRefObject<{ yaw: number; pitch: number }>; onReset: () => void; onPosition: (position: number[]) => void; active: boolean }) {
+function lightingFor(manifest: Manifest) {
+  const preset = manifest.pixel_spec?.lighting_preset;
+  const presets: Record<string, { background: string; sky: string; ground: string; hemi: number; ambient: number; key: string; keyIntensity: number; fill: string; fillIntensity: number; shadows: boolean; emissiveLift: number }> = {
+    indoor_warm_window: { background: "#293044", sky: "#fff3da", ground: "#4d5262", hemi: 0.92, ambient: 0.58, key: "#ffd39a", keyIntensity: 1.55, fill: "#9ab8db", fillIntensity: 0.28, shadows: true, emissiveLift: 0.018 },
+    indoor_warm_window_v2: { background: "#252b3d", sky: "#fff0d0", ground: "#454858", hemi: 0.70, ambient: 0.36, key: "#ffd09a", keyIntensity: 1.82, fill: "#9bb8d8", fillIntensity: 0.16, shadows: true, emissiveLift: 0.006 },
+    indoor_pixel_cozy_v3: { background: "#20283a", sky: "#fff1d6", ground: "#383d4a", hemi: 0.48, ambient: 0.22, key: "#ffd09a", keyIntensity: 2.18, fill: "#7999bd", fillIntensity: 0.08, shadows: true, emissiveLift: 0.004 },
+    outdoor_cool_daylight: { background: "#7694aa", sky: "#d9efff", ground: "#6d7d87", hemi: 1.25, ambient: 0.68, key: "#e8f5ff", keyIntensity: 1.45, fill: "#9fc6e6", fillIntensity: 0.18, shadows: true, emissiveLift: 0.008 },
+    outdoor_cool_daylight_v2: { background: "#647f98", sky: "#e7f4ff", ground: "#526b7d", hemi: 0.84, ambient: 0.34, key: "#f4fbff", keyIntensity: 1.78, fill: "#86acd1", fillIntensity: 0.10, shadows: true, emissiveLift: 0.004 },
+    street_soft_daylight: { background: "#273244", sky: "#e4eef3", ground: "#626c70", hemi: 1.10, ambient: 0.66, key: "#fff2d5", keyIntensity: 1.30, fill: "#9fc5dc", fillIntensity: 0.24, shadows: true, emissiveLift: 0.012 },
+    street_soft_daylight_v2: { background: "#202c40", sky: "#e8f3f7", ground: "#58636a", hemi: 0.76, ambient: 0.40, key: "#fff0d2", keyIntensity: 1.62, fill: "#8fb5d0", fillIntensity: 0.14, shadows: true, emissiveLift: 0.006 },
+    facade_blue_hour: { background: "#18243a", sky: "#b4cced", ground: "#34394d", hemi: 0.78, ambient: 0.42, key: "#b6d5ff", keyIntensity: 0.92, fill: "#f3b26c", fillIntensity: 0.32, shadows: true, emissiveLift: 0.012 },
+    facade_blue_hour_v2: { background: "#142039", sky: "#c0d9f2", ground: "#2c354c", hemi: 0.62, ambient: 0.28, key: "#c4ddff", keyIntensity: 1.10, fill: "#f6ad68", fillIntensity: 0.46, shadows: true, emissiveLift: 0.016 },
+    facade_blue_hour_v3: { background: "#101b34", sky: "#c8e0f7", ground: "#26334b", hemi: 0.82, ambient: 0.40, key: "#c0ddff", keyIntensity: 1.28, fill: "#ffb870", fillIntensity: 0.58, shadows: true, emissiveLift: 0.028 },
+    street_soft_daylight_v3: { background: "#1f2d42", sky: "#eaf6fb", ground: "#4f5f68", hemi: 0.92, ambient: 0.48, key: "#fff3da", keyIntensity: 1.76, fill: "#9bc7dc", fillIntensity: 0.20, shadows: true, emissiveLift: 0.010 },
+  };
+  return presets[preset ?? ""] ?? { background: "#263044", sky: "#f8fbff", ground: "#7d8798", hemi: 1.2, ambient: 1.0, key: "#ffffff", keyIntensity: 1.2, fill: "#ffffff", fillIntensity: 0, shadows: false, emissiveLift: 0.07 };
+}
+
+function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, onInputEvent, onFrameSample, active }: { objectUrl: string; manifest: Manifest; lookRef: React.MutableRefObject<{ yaw: number; pitch: number }>; onReset: () => void; onPosition: (position: number[]) => void; onInputEvent: (event: RouteInputEvent) => void; onFrameSample: (sample: RouteFrameSample) => void; active: boolean }) {
   const { scene } = useGLTF(objectUrl);
-  const { camera, size } = useThree();
+  const { camera, size, gl } = useThree();
+  const lighting = lightingFor(manifest);
   const keys = useRef(new Set<string>());
   const flying = useRef(false);
   const lastPositionReport = useRef(0);
   const lastTerrainCollisionCheck = useRef(0);
   const lastValidTerrainPosition = useRef(new THREE.Vector3());
   const movement = manifest.movement;
+  const emitInputEvent = (type: RouteInputEvent["type"], key?: string) => onInputEvent({
+    at_ms: performance.now(),
+    type,
+    key,
+    position: [camera.position.x, camera.position.y, camera.position.z],
+    yaw: lookRef.current.yaw,
+    pitch: lookRef.current.pitch,
+    keys: Array.from(keys.current).sort(),
+  });
   const terrainCollisionMeshes = useMemo(() => {
     if (movement.kind !== "terrain") return [] as THREE.Object3D[];
     const meshes: THREE.Object3D[] = [];
@@ -97,9 +127,12 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
     // inside; otherwise WebGL back-face culling turns the side view into a
     // black void. Apply this only to the loaded scene materials, without
     // changing the geometry or claiming that unseen space was reconstructed.
+    gl.shadowMap.enabled = lighting.shadows;
+    gl.shadowMap.type = THREE.PCFSoftShadowMap;
     scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
       const material = mesh.material;
+      if (mesh.isMesh) { mesh.castShadow = lighting.shadows; mesh.receiveShadow = lighting.shadows; }
       if (!material) return;
       const materials = Array.isArray(material) ? material : [material];
       for (const entry of materials) {
@@ -111,14 +144,17 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
         if ("emissive" in entry && "color" in entry) {
           const lit = entry as THREE.MeshStandardMaterial;
           lit.emissive.copy(lit.color);
-          lit.emissiveIntensity = 0.07;
+          lit.emissiveIntensity = lighting.emissiveLift;
         }
         entry.needsUpdate = true;
       }
     });
-  }, [scene]);
+  }, [gl, lighting.emissiveLift, lighting.shadows, scene]);
   useEffect(() => {
-    const clearKeys = () => keys.current.clear();
+    const clearKeys = (eventType: "blur" | "visibilitychange" = "blur") => {
+      keys.current.clear();
+      emitInputEvent(eventType);
+    };
     if (!active) { clearKeys(); return; }
     const down = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -129,11 +165,13 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
       if (sceneKeys.has(key)) event.preventDefault();
       if (key === "f" && event.repeat) return;
       keys.current.add(key);
+      emitInputEvent("keydown", key);
       if (key === "f" && movement.allow_flight) flying.current = !flying.current;
       if (key === "r") {
         flying.current = false;
         camera.position.set(...(movement.start as [number, number, number]));
         lookRef.current = { yaw: 0, pitch: 0 };
+        emitInputEvent("reset", key);
         onReset();
       }
     };
@@ -141,9 +179,12 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
       const key = event.key.toLowerCase();
       if (key === " ") event.preventDefault();
       keys.current.delete(key);
+      emitInputEvent("keyup", key);
     };
+    const onWindowBlur = () => clearKeys("blur");
+    const onVisibilityChange = () => clearKeys("visibilitychange");
     window.addEventListener("keydown", down, { passive: false }); window.addEventListener("keyup", up, { passive: false });
-    window.addEventListener("blur", clearKeys); document.addEventListener("visibilitychange", clearKeys);
+    window.addEventListener("blur", onWindowBlur); document.addEventListener("visibilitychange", onVisibilityChange);
     // Keep the user's position when a progressive full scene swaps in. A new
     // SceneContent instance still starts at the manifest origin.
     if (camera.userData.walkIntoPhotosInitialized !== true) {
@@ -174,8 +215,8 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
       camera.far = manifest.camera.far;
       camera.updateProjectionMatrix();
     }
-    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", clearKeys); document.removeEventListener("visibilitychange", clearKeys); };
-  }, [active, camera, manifest.camera, movement, onReset, size.height, size.width]);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", onWindowBlur); document.removeEventListener("visibilitychange", onVisibilityChange); };
+  }, [active, camera, manifest.camera, movement, onInputEvent, onReset, size.height, size.width]);
   useFrame((_, delta) => {
     const forward = Number(keys.current.has("w") || keys.current.has("arrowup")) - Number(keys.current.has("s") || keys.current.has("arrowdown"));
     const sideways = Number(keys.current.has("d") || keys.current.has("arrowright")) - Number(keys.current.has("a") || keys.current.has("arrowleft"));
@@ -238,6 +279,14 @@ function SceneContent({ objectUrl, manifest, lookRef, onReset, onPosition, activ
       lastPositionReport.current = now;
       onPosition([camera.position.x, camera.position.y, camera.position.z]);
     }
+    onFrameSample({
+      at_ms: now,
+      delta_ms: delta * 1000,
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      yaw: lookRef.current.yaw,
+      pitch: lookRef.current.pitch,
+      keys: Array.from(keys.current).sort(),
+    });
   });
   return <primitive object={scene} />;
 }
@@ -353,11 +402,110 @@ function SceneViewer({ objectUrl, manifest }: { objectUrl: string; manifest: Man
   const [dragging, setDragging] = useState(false);
   const [look, setLook] = useState({ yaw: 0, pitch: 0 });
   const [position, setPosition] = useState(manifest.movement.start);
+  const [recording, setRecording] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const [recorderMessage, setRecorderMessage] = useState("");
+  const [routeUrl, setRouteUrl] = useState<string>();
+  const [videoUrl, setVideoUrl] = useState<string>();
   const last = useRef({ x: 0, y: 0 });
   const lookRef = useRef({ yaw: 0, pitch: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>();
+  const recorderRef = useRef<MediaRecorder>();
+  const streamRef = useRef<MediaStream>();
+  const recordingRef = useRef(false);
+  const timerRef = useRef<number>();
+  const routeRef = useRef<{ startedAt: number; events: RouteInputEvent[]; frames: RouteFrameSample[] }>();
   const resetLook = useCallback(() => setLook({ yaw: 0, pitch: 0 }), []);
   const reportPosition = useCallback((next: number[]) => setPosition(next), []);
+  const recordInputEvent = useCallback((event: RouteInputEvent) => {
+    if (!recordingRef.current || !routeRef.current) return;
+    routeRef.current.events.push({ ...event, at_ms: Number((event.at_ms - routeRef.current.startedAt).toFixed(3)) });
+  }, []);
+  const recordFrameSample = useCallback((sample: RouteFrameSample) => {
+    if (!recordingRef.current || !routeRef.current) return;
+    routeRef.current.frames.push({ ...sample, at_ms: Number((sample.at_ms - routeRef.current.startedAt).toFixed(3)) });
+  }, []);
+  const setCanvas = useCallback((canvas: HTMLCanvasElement) => { canvasRef.current = canvas; }, []);
   useEffect(() => setPosition(manifest.movement.start), [manifest.scene_id, manifest.movement.start]);
+  useEffect(() => () => {
+    recordingRef.current = false;
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (routeUrl) URL.revokeObjectURL(routeUrl);
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    if (timerRef.current) window.clearInterval(timerRef.current);
+  }, [routeUrl, videoUrl]);
+
+  function percentile(values: number[], fraction: number) {
+    if (!values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
+  }
+
+  function stopRecording() {
+    recordingRef.current = false;
+    setRecording(false);
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = undefined;
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    recorderRef.current = undefined;
+    streamRef.current = undefined;
+    setRecorderMessage("正在整理路线和录像…");
+  }
+
+  function startRecording() {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof canvas.captureStream !== "function" || typeof MediaRecorder === "undefined") {
+      setRecorderMessage("当前浏览器不支持画布录像；仍可用手动长按验收。未生成录像文件。");
+      return;
+    }
+    if (routeUrl) URL.revokeObjectURL(routeUrl);
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setRouteUrl(undefined); setVideoUrl(undefined); setRecorderMessage("");
+    const startedAt = performance.now();
+    routeRef.current = { startedAt, events: [], frames: [] };
+    const stream = canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : "";
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    recorder.onstop = () => {
+      const route = routeRef.current;
+      if (!route) return;
+      const deltas = route.frames.map((sample) => sample.delta_ms).filter((value) => Number.isFinite(value));
+      const routePayload = {
+        schema: "luna-route-evidence/1",
+        scene_id: manifest.scene_id,
+        scene_version: manifest.version,
+        started_at: new Date().toISOString(),
+        recording_fps_target: 30,
+        events: route.events,
+        frames: route.frames,
+        metrics: {
+          frame_count: deltas.length,
+          duration_ms: route.frames.length ? route.frames[route.frames.length - 1].at_ms : 0,
+          delta_ms_p50: percentile(deltas, 0.50),
+          delta_ms_p95: percentile(deltas, 0.95),
+          over_33_3ms: deltas.filter((value) => value > 33.3).length,
+          over_100ms: deltas.filter((value) => value > 100).length,
+        },
+        notes: ["录像是画布连续帧；按键、位置和朝向来自同一运行时记录。需结合路线检查判定碰撞和失焦。"],
+      };
+      setRouteUrl(URL.createObjectURL(new Blob([JSON.stringify(routePayload, null, 2)], { type: "application/json" })));
+      if (chunks.length) setVideoUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || "video/webm" })));
+      setRecorderMessage(`已保存 ${route.frames.length} 帧、${route.events.length} 个输入事件。`);
+    };
+    recorderRef.current = recorder;
+    streamRef.current = stream;
+    recordingRef.current = true;
+    setRecording(true); setRecordingElapsed(0);
+    recorder.start(250);
+    timerRef.current = window.setInterval(() => setRecordingElapsed(performance.now() - startedAt), 250);
+  }
   const move = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging) return;
     const next = { yaw: lookRef.current.yaw - (event.clientX - last.current.x) * 0.005, pitch: THREE.MathUtils.clamp(lookRef.current.pitch - (event.clientY - last.current.y) * 0.005, -1.35, 1.35) };
@@ -365,14 +513,16 @@ function SceneViewer({ objectUrl, manifest }: { objectUrl: string; manifest: Man
   };
   const cameraSpec = manifest.camera;
   const initialCamera = cameraSpec ?? { position: manifest.movement.start, fov_y: 68, near: 0.01, far: 200 };
+  const activeLighting = lightingFor(manifest);
   const debug = new URLSearchParams(window.location.search).get("debug") === "1";
   return <div ref={viewerRef} className="scene-viewer" tabIndex={0} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onPointerDown={(event) => { viewerRef.current?.focus(); setFocused(true); setDragging(true); last.current = { x: event.clientX, y: event.clientY }; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }} onPointerUp={() => setDragging(false)} onPointerLeave={() => setDragging(false)} onPointerMove={move}>
-    <Canvas camera={{ position: initialCamera.position as [number, number, number], fov: initialCamera.fov_y, near: initialCamera.near, far: initialCamera.far }} onCreated={({ gl, scene }) => { gl.setClearColor("#263044", 1); scene.fog = cameraSpec ? null : new THREE.Fog("#15152b", 8, 40); }}>
-      <color attach="background" args={["#263044"]} /><hemisphereLight args={["#f8fbff", "#7d8798", 1.2]} /><ambientLight intensity={1.0} /><directionalLight position={[4, 8, 4]} intensity={1.2} />
-      <Suspense fallback={null}><SceneContent objectUrl={objectUrl} manifest={manifest} lookRef={lookRef} onReset={resetLook} onPosition={reportPosition} active={focused} /></Suspense>
+    <Canvas camera={{ position: initialCamera.position as [number, number, number], fov: initialCamera.fov_y, near: initialCamera.near, far: initialCamera.far }} shadows={activeLighting.shadows} onCreated={({ gl, scene }) => { setCanvas(gl.domElement); gl.setClearColor(activeLighting.background, 1); scene.fog = cameraSpec ? null : new THREE.Fog("#15152b", 8, 40); }}>
+      <color attach="background" args={[activeLighting.background]} /><hemisphereLight args={[activeLighting.sky, activeLighting.ground, activeLighting.hemi]} /><ambientLight color={activeLighting.sky} intensity={activeLighting.ambient} /><directionalLight color={activeLighting.key} position={[4, 8, 4]} intensity={activeLighting.keyIntensity} castShadow={activeLighting.shadows} shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-camera-near={0.1} shadow-camera-far={80} shadow-camera-left={-24} shadow-camera-right={24} shadow-camera-top={24} shadow-camera-bottom={-24} shadow-bias={-0.0008} />{activeLighting.fillIntensity > 0 && <directionalLight color={activeLighting.fill} position={[-5, 3, -6]} intensity={activeLighting.fillIntensity} />}
+      <Suspense fallback={null}><SceneContent objectUrl={objectUrl} manifest={manifest} lookRef={lookRef} onReset={resetLook} onPosition={reportPosition} onInputEvent={recordInputEvent} onFrameSample={recordFrameSample} active={focused} /></Suspense>
     </Canvas>
     <div className="viewer-help">拖动360°环顾 · WASD移动 · R回到起点 · F飞行{manifest.movement.allow_flight ? " · 空格上升 · C下降" : ""}</div>
     <div className="viewer-tag">{manifest.template} · {manifest.generation_source ?? manifest.engine ?? "legacy"} · {manifest.version}</div>
+    <div className="viewer-recorder"><button className={recording ? "recording" : "ghost"} onClick={recording ? stopRecording : startRecording}>{recording ? `停止路线录制 ${(recordingElapsed / 1000).toFixed(1)}s` : "开始路线录制"}</button>{routeUrl && <a className="button" href={routeUrl} download={`${manifest.scene_id}-route.json`}>下载路线 JSON</a>}{videoUrl && <a className="button" href={videoUrl} download={`${manifest.scene_id}-route.webm`}>下载连续录像</a>}{recorderMessage && <span>{recorderMessage}</span>}</div>
     {debug && <div className="viewer-debug">位置 {position.map((value) => value.toFixed(2)).join(" / ")} · {cameraSpec ? `FOV ${cameraSpec.fov_x?.toFixed(1)}°/${cameraSpec.fov_y?.toFixed(1)}° · scale ${cameraSpec.world_scale.toFixed(4)}` : "旧场景协议"}</div>}
     <span className="sr-only">视角 {look.yaw.toFixed(2)} / {look.pitch.toFixed(2)} · 位置 {position.map((value) => value.toFixed(2)).join(" / ")}</span>
   </div>;

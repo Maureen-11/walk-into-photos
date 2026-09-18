@@ -87,6 +87,40 @@ def _box(
     return mesh
 
 
+def _ridge(
+    width: float,
+    height: float,
+    base_y: float,
+    center_z: float,
+    thickness: float,
+    colour: list[int],
+    name: str,
+) -> trimesh.Trimesh:
+    """Create a bounded, thick distant ridge rather than a depth-axis cone."""
+
+    profile = np.asarray(
+        [(-0.50, 0.0), (-0.38, 0.42), (-0.23, 0.28), (-0.08, 0.72),
+         (0.08, 0.46), (0.23, 0.82), (0.38, 0.34), (0.50, 0.0)],
+        dtype=np.float64,
+    )
+    front = np.column_stack((profile[:, 0] * width, base_y + profile[:, 1] * height, np.full(len(profile), center_z - thickness / 2)))
+    back = np.column_stack((profile[:, 0] * width, base_y + profile[:, 1] * height, np.full(len(profile), center_z + thickness / 2)))
+    vertices = np.vstack((front, back))
+    count = len(profile)
+    faces: list[list[int]] = []
+    for index in range(count - 1):
+        next_index = index + 1
+        faces.extend([
+            [index, next_index, count + next_index],
+            [index, count + next_index, count + index],
+        ])
+    faces.extend([[count - 1, 0, count], [count - 1, count, count + count - 1]])
+    mesh = trimesh.Trimesh(vertices=vertices, faces=np.asarray(faces, dtype=np.int64), process=False)
+    mesh.visual.vertex_colors = np.tile(np.asarray([*colour, 255], dtype=np.uint8), (len(mesh.vertices), 1))
+    mesh.metadata["layout_name"] = name
+    return mesh
+
+
 def _collision(name: str, mesh: trimesh.Trimesh, label: str) -> CollisionBox:
     bounds = np.asarray(mesh.bounds, dtype=np.float64)
     return CollisionBox(
@@ -137,6 +171,33 @@ def _movement(
         SceneTemplate.facade_flight: "photo_building_walk",
     }.get(template, "photo_supported_walk")
     outdoor = template in {SceneTemplate.landscape_journey, SceneTemplate.street_descent}
+    route_checkpoints = [
+        [0.0, 0.0, float(max(lower[2] + depth * 0.22, -2.0))],
+        [float(min(upper[0] * 0.35, 2.0)), 0.0, float(max(lower[2] + depth * 0.48, -4.0))],
+        [float(max(lower[0] * 0.35, -2.0)), 0.0, float(max(lower[2] + depth * 0.72, -6.0))],
+    ]
+    if template is SceneTemplate.indoor_walk and collisions:
+        # Keep a concrete, inspectable route for the one generated obstacle:
+        # approach it on the capture axis, move to a free side, then pass it.
+        # These are evidence checkpoints, not an automatic camera path.
+        obstacle_bounds = collisions[-1].bounds
+        obstacle_x = obstacle_bounds["x"]
+        obstacle_z = obstacle_bounds["z"]
+        if obstacle_x and obstacle_z:
+            x_lower = float(lower[0] + x_margin + 0.15)
+            x_upper = float(upper[0] - x_margin - 0.15)
+            left_side = float(obstacle_x[0] - 0.30 - 0.45)
+            right_side = float(obstacle_x[1] + 0.30 + 0.45)
+            candidates = [side for side in (left_side, right_side) if x_lower <= side <= x_upper]
+            if candidates:
+                side = min(candidates, key=lambda value: abs(value))
+                approach_z = float(max(lower[2] + 1.0, obstacle_z[1] + 0.85))
+                pass_z = float(max(lower[2] + 1.0, obstacle_z[0] - 0.85))
+                route_checkpoints = [
+                    [0.0, 0.0, approach_z],
+                    [side, 0.0, approach_z],
+                    [side, 0.0, pass_z],
+                ]
     return MovementProfile(
         kind=kind,
         start=[0.0, 0.0, 0.0],
@@ -151,11 +212,7 @@ def _movement(
         ground_follow=False,
         ground_y=0.0,
         collision_radius=0.30,
-        route_checkpoints=[
-            [0.0, 0.0, float(max(lower[2] + depth * 0.22, -2.0))],
-            [float(min(upper[0] * 0.35, 2.0)), 0.0, float(max(lower[2] + depth * 0.48, -4.0))],
-            [float(max(lower[0] * 0.35, -2.0)), 0.0, float(max(lower[2] + depth * 0.72, -6.0))],
-        ],
+        route_checkpoints=route_checkpoints,
         collision_boxes=collisions,
     )
 
@@ -231,11 +288,23 @@ def _add_natural_structure(
     ground = _box((width + 10.0, 0.18, depth + 10.0), (0.0, floor_y, float((lower[2] + upper[2]) * 0.5)), _colour(palette["lower"], 0.86), "generated-terrain-ground")
     _add(scene, objects, "generated-terrain-ground", ground, "generated_ground")
     generated = ["generated-terrain-ground"]
-    ridge_colour = _colour(palette["upper"], 0.62)
-    for index, factor in enumerate((0.30, 0.48, 0.66)):
-        ridge = trimesh.creation.cone(radius=max(2.5, width * 0.13), height=max(2.0, depth * 0.20), sections=8)
-        ridge.apply_translation([(-width * 0.30) + index * width * 0.30, floor_y + depth * 0.10, float(lower[2] + depth * factor)])
-        ridge.visual.vertex_colors = np.tile(np.asarray([*ridge_colour, 255], dtype=np.uint8), (len(ridge.vertices), 1))
+    ridge_colour = _colour(palette["upper"], 0.72)
+    ridge_height = min(max(depth * 0.16, 2.2), 4.5)
+    ridge_width = max(width * 0.85, 12.0)
+    # More-negative z is farther from the capture point.  Keep these ridges
+    # behind the near photo surface so they read as distant context instead of
+    # giant foreground cones that occlude the source image.
+    for index, factor in enumerate((0.22, 0.36, 0.50)):
+        ridge = _ridge(
+            ridge_width * (1.0 + index * 0.10),
+            ridge_height * (0.72 + index * 0.12),
+            floor_y + 0.02,
+            float(lower[2] + depth * factor),
+            max(0.20, depth * 0.018),
+            ridge_colour,
+            f"generated-distant-ridge-{index}",
+        )
+        ridge.apply_translation([0.0, 0.0, 0.0])
         name = f"generated-distant-ridge-{index}"
         _add(scene, objects, name, ridge, "generated_distant_context")
         generated.append(name)
@@ -325,6 +394,8 @@ def build_photo_supported_scene(
         "template": template.value,
         "estimated_scale": float(moge_result.get("normalization", {}).get("world_scale", 1.0)),
         "photo_surface": "moge-camera-facing-surface",
+        "material_policy": "generated_structure_uses_photo_band_palette_not_full_image_texture",
+        "material_palette": {key: list(value) for key, value in palette.items()},
         "objects": objects,
         "generated_regions": generated,
         "manual_regions": normalized_regions,

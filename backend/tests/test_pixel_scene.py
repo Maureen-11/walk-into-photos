@@ -6,6 +6,9 @@ from PIL import Image
 from app.models import SceneTemplate
 from app.services.pixel_scene import (
     BASE_VOXEL,
+    FURNITURE_VOXEL,
+    MICRO_VOXEL,
+    PIXEL_ASSET_LIBRARY_VERSION,
     PIXEL_LAYOUT_VERSION,
     PIXEL_V02_LAYOUT_VERSION,
     build_pixel_corridor_v02,
@@ -14,6 +17,9 @@ from app.services.pixel_scene import (
     build_pixel_nature_v03,
     build_pixel_building_v05,
     build_pixel_street_v05,
+    PIXEL_V06_LAYOUT_VERSION,
+    build_pixel_corridor_v06,
+    build_pixel_living_v06,
 )
 
 
@@ -127,3 +133,73 @@ def test_pixel_v05_outdoor_profiles_are_separated_and_external(tmp_path: Path):
     assert any(item["role"] == "vehicle_proxy" for item in street_layout["objects"])
     assert any(item["role"] == "window" for item in building_layout["objects"])
     assert building["movement"]["allow_flight"] is False
+
+
+def test_pixel_v06_adds_readable_layers_without_changing_indoor_collision_contract(tmp_path: Path):
+    source = tmp_path / "indoor.png"
+    image = Image.new("RGB", (48, 32), (205, 210, 212))
+    for y in range(16, 32):
+        for x in range(48):
+            image.putpixel((x, y), (132, 108, 92))
+    image.save(source)
+
+    v02_dir = tmp_path / "v02"
+    v06_dir = tmp_path / "v06"
+    v02 = build_pixel_living_v02(source, v02_dir, "pixel-v02-compare")
+    v06 = build_pixel_living_v06(source, v06_dir, "pixel-v06-compare")
+    v02_layout = json.loads((v02_dir / "layout.json").read_text(encoding="utf-8"))
+    v06_layout = json.loads((v06_dir / "layout.json").read_text(encoding="utf-8"))
+
+    assert v06["layout_version"] == PIXEL_V06_LAYOUT_VERSION
+    assert v06["style_route"] == "pixel_style_sample_v6"
+    assert len(v06_layout["objects"]) > len(v02_layout["objects"])
+    assert len(v06["movement"]["collision_boxes"]) == len(v02["movement"]["collision_boxes"])
+    assert v06["pixel_spec"]["asset_library_version"] == PIXEL_ASSET_LIBRARY_VERSION
+    assert v06["pixel_spec"]["furniture_voxel"] == FURNITURE_VOXEL
+    assert v06["pixel_spec"]["micro_voxel"] == MICRO_VOXEL
+    assert v06["pixel_spec"]["photo_key_colour_budget"] == 16
+    assert any(item["id"] == "pixel-v06-front-wall-panel" for item in v06_layout["objects"])
+    assert any(item["id"] == "pixel-v06-front-wall-eye-panel" for item in v06_layout["objects"])
+    assert any(item["id"] == "pixel-v06-screen-bezel" for item in v06_layout["objects"])
+    assert 0.0625 in {item["voxel_grid"] for item in v06_layout["objects"]}
+    assert FURNITURE_VOXEL in {item["voxel_grid"] for item in v06_layout["objects"]}
+    assert MICRO_VOXEL in {item["voxel_grid"] for item in v06_layout["objects"]}
+
+
+def test_pixel_v06_corridor_adds_door_and_portal_detail(tmp_path: Path):
+    source = tmp_path / "corridor.png"
+    Image.new("RGB", (40, 24), (188, 198, 202)).save(source)
+    output = tmp_path / "corridor-v06"
+    manifest = build_pixel_corridor_v06(source, output, "pixel-v06-corridor")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+
+    ids = {item["id"] for item in layout["objects"]}
+    assert manifest["layout_version"] == PIXEL_V06_LAYOUT_VERSION
+    assert "pixel-v06-left-door-0-handle" in ids
+    assert "pixel-v06-corridor-front-sign" in ids
+    assert "pixel-v06-corridor-front-eye-panel" in ids
+    assert len(manifest["movement"]["collision_boxes"]) == 6
+    grids = {item["voxel_grid"] for item in layout["objects"]}
+    assert FURNITURE_VOXEL in grids
+    assert MICRO_VOXEL in grids
+
+
+def test_pixel_q02_i01_uses_photo_specific_window_side_layout(tmp_path: Path):
+    source = tmp_path / "i01.png"
+    Image.new("RGB", (40, 24), (188, 198, 202)).save(source)
+    output = tmp_path / "i01-q02"
+
+    manifest = build_pixel_corridor_v06(
+        source,
+        output,
+        "pixel-q02-i01-test",
+        layout_variant="i01",
+    )
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    ids = {item["id"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v6"
+    assert layout["layout_authoring"] == "q00_visual_index:i01"
+    assert "pixel-v02-corridor-left-window-0" in ids
+    assert "pixel-v02-corridor-left-door-0" not in ids
+    assert "pixel-q02-i01-window-light-0-0" in ids

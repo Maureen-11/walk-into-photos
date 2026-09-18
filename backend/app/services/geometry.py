@@ -7,6 +7,7 @@ import struct
 import tempfile
 import gc
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -337,6 +338,7 @@ def generate_scene(
     world_scale_override: float | None = None,
     manual_regions: list[RegionConfirmation] | None = None,
     quality_route: bool = True,
+    stage_callback: Callable[[str, int, str], None] | None = None,
 ) -> dict:
     if isinstance(template, SceneTemplate):
         selected_template = template
@@ -356,6 +358,8 @@ def generate_scene(
                 template=selected_template,
                 world_scale_override=world_scale_override,
             )
+            if stage_callback:
+                stage_callback("depth_and_camera", 38, "质量路线：深度与相机已完成")
             moge_result["stage_timings_ms"] = {
                 "depth_and_camera": round((time.perf_counter() - quality_started) * 1000),
             }
@@ -368,6 +372,8 @@ def generate_scene(
                 settings,
                 manual_regions=manual_regions,
             )
+            if stage_callback:
+                stage_callback("photo_supported_structure", 70, "质量路线：照片表面与类别结构已完成")
             result["stage_timings_ms"] = {
                 **dict(moge_result.get("stage_timings_ms", {})),
                 "photo_supported_structure": round((time.perf_counter() - structure_started) * 1000),
@@ -379,6 +385,8 @@ def generate_scene(
             # silently presented as a successful reconstruction. The coarse
             # route remains a usable, explicitly labelled fallback.
             if settings.coarse_scene_enabled:
+                if stage_callback:
+                    stage_callback("quality_route_fallback", 70, "质量路线失败，正在保留明确标记的粗模候选")
                 fallback = build_coarse_scene(
                     image_path,
                     scene_path,

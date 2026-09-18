@@ -9,8 +9,9 @@ import zipfile
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = SCRIPT_DIR.parent
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+for extra in (BACKEND_DIR, SCRIPT_DIR):
+    if str(extra) not in sys.path:
+        sys.path.insert(0, str(extra))
 
 from app.models import SceneManifest
 
@@ -34,7 +35,7 @@ def _scene_record(scene_dir: Path, archive: Path) -> dict[str, object]:
     missing = sorted(required - names)
     if bad_member is not None or missing:
         raise ValueError(f"invalid archive {archive}: bad={bad_member!r}, missing={missing}")
-    if manifest.style_route not in {"pixel_style_sample_v2", "pixel_style_sample_v3", "pixel_style_sample_v5"}:
+    if manifest.style_route not in {"pixel_style_sample_v2", "pixel_style_sample_v3", "pixel_style_sample_v5", "pixel_style_sample_v6", "pixel_style_sample_v7", "pixel_style_sample_v8", "pixel_style_sample_v9", "pixel_style_sample_v10", "pixel_style_sample_v11", "pixel_style_sample_v12", "pixel_style_sample_v13", "pixel_style_sample_v14", "pixel_style_sample_v15", "pixel_style_sample_v16", "pixel_style_sample_v17", "pixel_style_sample_v18", "pixel_style_sample_v19", "pixel_style_sample_v20", "pixel_style_sample_v21", "pixel_style_sample_v22", "pixel_style_sample_v23", "pixel_style_sample_v24", "pixel_style_sample_v25", "pixel_style_sample_v26", "pixel_style_sample_v27", "pixel_style_sample_v28", "pixel_style_sample_v29", "pixel_style_sample_v30", "pixel_style_sample_v31", "pixel_style_sample_v32", "pixel_style_sample_v33", "pixel_style_sample_v34", "pixel_style_sample_v35"}:
         raise ValueError(f"unexpected style route: {manifest.style_route}")
     if not manifest.movement.collision_boxes:
         raise ValueError(f"no collision boxes: {scene_dir}")
@@ -65,6 +66,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True, help="Catalog JSON output path")
     parser.add_argument("--scene", action="append", required=True, metavar="LABEL=SCENE_DIR", help="Scene directory")
     parser.add_argument("--archive", action="append", required=True, metavar="LABEL=ZIP", help="Matching offline ZIP")
+    parser.add_argument("--verify", action="store_true", help="写完 catalog 后立即跑真实 file:// 离线验证，并把 verdict 合并进 catalog")
+    parser.add_argument("--verify-cmd", type=Path, help="offline-verify 的 run-verify.cmd 路径（默认自动探测）")
+    parser.add_argument("--verify-timeout", type=int, default=240, help="每个产物验证超时秒数")
+    parser.add_argument("--verify-headed", action="store_true", help="离线验证用真实 GPU（弹出浏览器窗口）")
     args = parser.parse_args()
     scenes = dict(item.split("=", 1) for item in args.scene)
     archives = dict(item.split("=", 1) for item in args.archive)
@@ -75,6 +80,18 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"output": str(args.output.resolve()), "count": len(records), "scene_ids": [record["scene_id"] for record in records]}, ensure_ascii=False))
+
+    if args.verify:
+        from verify_offline_delivery import verify_catalog
+
+        summary = verify_catalog(
+            args.output,
+            verify_cmd=args.verify_cmd,
+            timeout=args.verify_timeout,
+            headed=args.verify_headed,
+        )
+        print(json.dumps(summary, ensure_ascii=False))
+        return 1 if (summary["fail"] or summary["skipped"]) else 0
     return 0
 
 

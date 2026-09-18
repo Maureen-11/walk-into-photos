@@ -46,8 +46,8 @@ job_creation_lock = Lock()
 _OFFLINE_VIEWER_HTML = r"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>走进照片 · 离线场景</title>
-<style>html,body{margin:0;height:100%;background:#101022;color:#eee;font:14px system-ui,sans-serif}#hud{position:fixed;z-index:2;left:14px;top:14px;padding:10px 12px;border-radius:10px;background:#111126dd;max-width:380px}#view{width:100%;height:100%;display:block;cursor:grab;touch-action:none}</style></head>
-<body><div id="hud">正在加载离线场景…<br><small>拖动环顾 · WASD移动 · R回到起点</small></div><canvas id="view"></canvas>
+<style>html,body{margin:0;height:100%;background:#101022;color:#eee;font:14px system-ui,sans-serif}#hud{position:fixed;z-index:2;left:14px;top:14px;padding:10px 12px;border-radius:10px;background:#111126dd;max-width:380px}#view{width:100%;height:100%;display:block;cursor:grab;touch-action:none}#recorder{position:fixed;z-index:3;left:14px;right:14px;bottom:14px;display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:8px;border-radius:9px;background:#111126dd;font-size:12px}#recorder button,#recorder a{border:0;border-radius:6px;padding:7px 10px;background:#7ff1e3;color:#101022;text-decoration:none;font-weight:700;cursor:pointer}#recorder button.recording{background:#b94362;color:#fff}</style></head>
+<body><div id="hud">正在加载离线场景…<br><small>拖动环顾 · WASD移动 · R回到起点</small></div><canvas id="view"></canvas><div id="recorder"><button id="record-button">开始路线录制</button><span id="record-status">可保存画布 WebM 与同步路线 JSON</span><a id="route-link" hidden>下载路线 JSON</a><a id="video-link" hidden>下载连续录像</a></div>
 <script type="module">
 __THREE_INLINE__
 __BUFFER_UTILS_INLINE__
@@ -55,20 +55,42 @@ __GLTF_LOADER_INLINE__
 const manifest=__MANIFEST_JSON__;
 const glbBytes=Uint8Array.from(atob("__GLB_BASE64__"),character=>character.charCodeAt(0));
 const canvas=document.querySelector('#view'),hud=document.querySelector('#hud');canvas.tabIndex=0;
-const renderer=new WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor('#263044',1);
-const scene=new Scene();scene.background=new Color('#263044');
-scene.add(new HemisphereLight('#f8fbff','#7d8798',1.2));const keyLight=new DirectionalLight('#ffffff',1.2);keyLight.position.set(4,8,4);scene.add(keyLight);
+const lightingPreset=manifest.pixel_spec?.lighting_preset||'neutral';const lighting={
+  neutral:{background:'#263044',sky:'#f8fbff',ground:'#7d8798',hemi:1.2,ambient:1.0,key:'#ffffff',keyIntensity:1.2,fill:'#ffffff',fillIntensity:0.0,shadows:false,emissiveLift:0.07},
+  indoor_warm_window:{background:'#293044',sky:'#fff3da',ground:'#4d5262',hemi:0.92,ambient:0.58,key:'#ffd39a',keyIntensity:1.55,fill:'#9ab8db',fillIntensity:0.28,shadows:true,emissiveLift:0.018},
+  indoor_warm_window_v2:{background:'#252b3d',sky:'#fff0d0',ground:'#454858',hemi:0.70,ambient:0.36,key:'#ffd09a',keyIntensity:1.82,fill:'#9bb8d8',fillIntensity:0.16,shadows:true,emissiveLift:0.006},
+  indoor_pixel_cozy_v3:{background:'#20283a',sky:'#fff1d6',ground:'#383d4a',hemi:0.48,ambient:0.22,key:'#ffd09a',keyIntensity:2.18,fill:'#7999bd',fillIntensity:0.08,shadows:true,emissiveLift:0.004},
+  outdoor_cool_daylight:{background:'#7694aa',sky:'#d9efff',ground:'#6d7d87',hemi:1.25,ambient:0.68,key:'#e8f5ff',keyIntensity:1.45,fill:'#9fc6e6',fillIntensity:0.18,shadows:true,emissiveLift:0.008},
+  outdoor_cool_daylight_v2:{background:'#647f98',sky:'#e7f4ff',ground:'#526b7d',hemi:0.84,ambient:0.34,key:'#f4fbff',keyIntensity:1.78,fill:'#86acd1',fillIntensity:0.10,shadows:true,emissiveLift:0.004},
+  street_soft_daylight:{background:'#273244',sky:'#e4eef3',ground:'#626c70',hemi:1.10,ambient:0.66,key:'#fff2d5',keyIntensity:1.30,fill:'#9fc5dc',fillIntensity:0.24,shadows:true,emissiveLift:0.012},
+  street_soft_daylight_v2:{background:'#202c40',sky:'#e8f3f7',ground:'#58636a',hemi:0.76,ambient:0.40,key:'#fff0d2',keyIntensity:1.62,fill:'#8fb5d0',fillIntensity:0.14,shadows:true,emissiveLift:0.006},
+  facade_blue_hour:{background:'#18243a',sky:'#b4cced',ground:'#34394d',hemi:0.78,ambient:0.42,key:'#b6d5ff',keyIntensity:0.92,fill:'#f3b26c',fillIntensity:0.32,shadows:true,emissiveLift:0.012}
+  ,facade_blue_hour_v2:{background:'#142039',sky:'#c0d9f2',ground:'#2c354c',hemi:0.62,ambient:0.28,key:'#c4ddff',keyIntensity:1.10,fill:'#f6ad68',fillIntensity:0.46,shadows:true,emissiveLift:0.016}
+  ,facade_blue_hour_v3:{background:'#101b34',sky:'#c8e0f7',ground:'#26334b',hemi:0.82,ambient:0.40,key:'#c0ddff',keyIntensity:1.28,fill:'#ffb870',fillIntensity:0.58,shadows:true,emissiveLift:0.028}
+  ,street_soft_daylight_v3:{background:'#1f2d42',sky:'#eaf6fb',ground:'#4f5f68',hemi:0.92,ambient:0.48,key:'#fff3da',keyIntensity:1.76,fill:'#9bc7dc',fillIntensity:0.20,shadows:true,emissiveLift:0.010}
+}[lightingPreset]||null;
+const activeLighting=lighting||{background:'#263044',sky:'#f8fbff',ground:'#7d8798',hemi:1.2,ambient:1.0,key:'#ffffff',keyIntensity:1.2,fill:'#ffffff',fillIntensity:0.0,shadows:false,emissiveLift:0.07};
+const renderer=new WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=activeLighting.shadows;renderer.shadowMap.type=PCFSoftShadowMap;renderer.setClearColor(activeLighting.background,1);
+const scene=new Scene();scene.background=new Color(activeLighting.background);
+scene.add(new HemisphereLight(activeLighting.sky,activeLighting.ground,activeLighting.hemi));scene.add(new AmbientLight(activeLighting.sky,activeLighting.ambient));const keyLight=new DirectionalLight(activeLighting.key,activeLighting.keyIntensity);keyLight.position.set(4,8,4);keyLight.castShadow=activeLighting.shadows;if(activeLighting.shadows){keyLight.shadow.mapSize.width=1024;keyLight.shadow.mapSize.height=1024;keyLight.shadow.camera.near=0.1;keyLight.shadow.camera.far=80;keyLight.shadow.camera.left=-24;keyLight.shadow.camera.right=24;keyLight.shadow.camera.top=24;keyLight.shadow.camera.bottom=-24;keyLight.shadow.bias=-0.0008}scene.add(keyLight);if(activeLighting.fillIntensity>0) {const fillLight=new DirectionalLight(activeLighting.fill,activeLighting.fillIntensity);fillLight.position.set(-5,3,-6);scene.add(fillLight)}
 const camera=new PerspectiveCamera(68,1,.01,200);let start=manifest.movement.start;let yaw=0,pitch=0;const keys=new Set();let dragging=false,last=[0,0],active=false;let movement=manifest.movement,flying=false;const collisionBoxes=movement.collision_boxes||[];const collisionRadius=movement.collision_radius||0;
+const recordButton=document.querySelector('#record-button'),recordStatus=document.querySelector('#record-status'),routeLink=document.querySelector('#route-link'),videoLink=document.querySelector('#video-link');let mediaRecorder=null,recordStream=null,recordChunks=[],recordTrace=null,recordStartedAt=0,recordTimer=null,recordRouteUrl=null,recordVideoUrl=null;
+function recordEvent(type,key){if(!mediaRecorder||!recordTrace)return;recordTrace.events.push({at_ms:Number((performance.now()-recordStartedAt).toFixed(3)),type,key,position:[camera.position.x,camera.position.y,camera.position.z],yaw,pitch,keys:Array.from(keys).sort()})}
+function quantile(values,fraction){if(!values.length)return null;const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.min(sorted.length-1,Math.floor((sorted.length-1)*fraction))]}
+function finishRecord(){if(!recordTrace)return;const deltas=recordTrace.frames.map(item=>item.delta_ms).filter(Number.isFinite);const payload={schema:'luna-route-evidence/1',scene_id:manifest.scene_id,scene_version:manifest.version,started_at:new Date().toISOString(),recording_fps_target:30,events:recordTrace.events,frames:recordTrace.frames,metrics:{frame_count:deltas.length,duration_ms:recordTrace.frames.length?recordTrace.frames[recordTrace.frames.length-1].at_ms:0,delta_ms_p50:quantile(deltas,.5),delta_ms_p95:quantile(deltas,.95),over_33_3ms:deltas.filter(value=>value>33.3).length,over_100ms:deltas.filter(value=>value>100).length},notes:['画布连续录像与输入/位置/朝向来自同一运行时；需结合路线判断碰撞。']};if(recordRouteUrl)URL.revokeObjectURL(recordRouteUrl);recordRouteUrl=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));routeLink.href=recordRouteUrl;routeLink.download=manifest.scene_id+'-route.json';routeLink.hidden=false;if(recordChunks.length){if(recordVideoUrl)URL.revokeObjectURL(recordVideoUrl);recordVideoUrl=URL.createObjectURL(new Blob(recordChunks,{type:mediaRecorder?.mimeType||'video/webm'}));videoLink.href=recordVideoUrl;videoLink.download=manifest.scene_id+'-route.webm';videoLink.hidden=false}recordStatus.textContent='已保存 '+payload.frames.length+' 帧、'+payload.events.length+' 个输入事件；指标已写入 JSON';recordTrace=null}
+function stopRecord(){if(!mediaRecorder)return;const current=mediaRecorder;mediaRecorder=null;clearInterval(recordTimer);recordTimer=null;keys.clear();if(current.state!=='inactive')current.stop();recordStream?.getTracks().forEach(track=>track.stop());recordStream=null;recordButton.textContent='开始路线录制';recordButton.classList.remove('recording');recordStatus.textContent='正在整理路线和录像…'}
+function startRecord(){if(!canvas.captureStream||typeof MediaRecorder==='undefined'){recordStatus.textContent='当前浏览器不支持画布录像；请用手动长按验收';return}if(recordRouteUrl)URL.revokeObjectURL(recordRouteUrl);if(recordVideoUrl)URL.revokeObjectURL(recordVideoUrl);routeLink.hidden=true;videoLink.hidden=true;recordChunks=[];recordStartedAt=performance.now();recordTrace={events:[],frames:[]};recordStream=canvas.captureStream(30);const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':MediaRecorder.isTypeSupported('video/webm')?'video/webm':'';const current=new MediaRecorder(recordStream,mime?{mimeType:mime}:undefined);current.ondataavailable=event=>{if(event.data.size)recordChunks.push(event.data)};current.onstop=finishRecord;mediaRecorder=current;current.start(250);recordButton.textContent='停止路线录制';recordButton.classList.add('recording');recordStatus.textContent='录制中：请点击画布获得焦点后执行路线';recordTimer=setInterval(()=>{if(recordTrace)recordStatus.textContent='录制中 '+((performance.now()-recordStartedAt)/1000).toFixed(1)+' 秒'},250)}recordButton.onclick=()=>mediaRecorder?stopRecord():startRecord();
+window.addEventListener('keydown',event=>{if(mediaRecorder)recordEvent('keydown',event.key.toLowerCase())});window.addEventListener('keyup',event=>{if(mediaRecorder)recordEvent('keyup',event.key.toLowerCase())});window.addEventListener('blur',()=>{if(mediaRecorder){keys.clear();recordEvent('blur')}});document.addEventListener('visibilitychange',()=>{if(mediaRecorder){keys.clear();recordEvent('visibilitychange')}});
 function fitCameraFov(){if(!manifest.camera)return;const aspect=Math.max(innerWidth/Math.max(innerHeight,1),.1);const imageAspect=manifest.camera.image_size?.[1]?manifest.camera.image_size[0]/manifest.camera.image_size[1]:aspect;if(manifest.camera.fov_x!=null&&manifest.camera.fov_y!=null){const rad=value=>value*Math.PI/180;const deg=value=>value*180/Math.PI;camera.fov=aspect>=imageAspect?deg(2*Math.atan(Math.tan(rad(manifest.camera.fov_x)/2)/aspect)):manifest.camera.fov_y}else camera.fov=manifest.camera.fov_y||camera.fov;camera.aspect=aspect;camera.updateProjectionMatrix()}
 camera.position.set(...start);if(manifest.camera){camera.near=manifest.camera.near;camera.far=manifest.camera.far;fitCameraFov()};
-window.addEventListener('keydown',event=>{if(!active)return;const key=event.key.toLowerCase();if([' ','w','a','s','d','c','f','r','arrowup','arrowdown','arrowleft','arrowright'].includes(key))event.preventDefault();if(key==='f'&&event.repeat)return;keys.add(key);if(key==='f'&&movement.allow_flight)flying=!flying;if(key==='r'){camera.position.set(...start);yaw=0;pitch=0;flying=false}});window.addEventListener('keyup',event=>{if(active)keys.delete(event.key.toLowerCase())});window.addEventListener('blur',()=>keys.clear());document.addEventListener('visibilitychange',()=>keys.clear());canvas.addEventListener('focus',()=>active=true);canvas.addEventListener('blur',()=>{active=false;keys.clear()});
+window.addEventListener('keydown',event=>{if(!active)return;const key=event.key.toLowerCase();if([' ','w','a','s','d','c','f','r','arrowup','arrowdown','arrowleft','arrowright'].includes(key))event.preventDefault();if(key==='f'&&event.repeat)return;keys.add(key);if(key==='f'&&movement.allow_flight)flying=!flying;if(key==='r'){camera.position.set(...start);yaw=0;pitch=0;flying=false;recordEvent('reset',key)}});window.addEventListener('keyup',event=>{if(active)keys.delete(event.key.toLowerCase())});window.addEventListener('blur',()=>keys.clear());document.addEventListener('visibilitychange',()=>keys.clear());canvas.addEventListener('focus',()=>active=true);canvas.addEventListener('blur',()=>{active=false;keys.clear();recordEvent('blur')});
 canvas.addEventListener('pointerdown',event=>{canvas.focus();dragging=true;last=[event.clientX,event.clientY];canvas.setPointerCapture(event.pointerId)});canvas.addEventListener('pointerup',()=>dragging=false);canvas.addEventListener('pointerleave',()=>dragging=false);canvas.addEventListener('pointermove',event=>{if(!dragging)return;yaw-=(event.clientX-last[0])*.005;pitch=Math.max(-1.35,Math.min(1.35,pitch-(event.clientY-last[1])*.005));last=[event.clientX,event.clientY]});
 function collides(x,z){return collisionBoxes.some(box=>{const xb=box.bounds?.x,zb=box.bounds?.z;if(!xb||!zb||xb.length!==2||zb.length!==2)return false;return x>=xb[0]-collisionRadius&&x<=xb[1]+collisionRadius&&z>=zb[0]-collisionRadius&&z<=zb[1]+collisionRadius})}
 function moveHorizontal(dx,dz){const steps=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dz))/.12));let x=camera.position.x,z=camera.position.z;const sx=dx/steps,sz=dz/steps;for(let i=0;i<steps;i++){const nx=x+sx,nz=z+sz;if(!collides(nx,nz)){x=nx;z=nz;continue}if(!collides(nx,z))x=nx;if(!collides(x,nz))z=nz}return [x,z]}
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/Math.max(h,1);fitCameraFov()}addEventListener('resize',resize);resize();
 const hudHint=`拖动环顾 · WASD移动 · R回到起点${movement.allow_flight?' · F飞行 · 空格上升 · C下降':''}`;let loadFailed=false;function updateHud(){if(loadFailed)return;hud.innerHTML=`<b>${manifest.template}</b> · ${manifest.version}<br><small>${hudHint} · 位置 ${camera.position.x.toFixed(2)} / ${camera.position.y.toFixed(2)} / ${camera.position.z.toFixed(2)}</small>`}updateHud();
-new GLTFLoader().parse(glbBytes.buffer,'',gltf=>{gltf.scene.traverse(object=>{const mesh=object;const material=mesh.material;if(!material)return;const materials=Array.isArray(material)?material:[material];for(const entry of materials){entry.side=DoubleSide;if('emissive' in entry&&'color' in entry){entry.emissive.copy(entry.color);entry.emissiveIntensity=.07}entry.needsUpdate=true}});scene.add(gltf.scene)},undefined,error=>{loadFailed=true;hud.textContent='离线场景加载失败：'+error.message});
-const clock=new Clock();function loop(){requestAnimationFrame(loop);const d=Math.min(clock.getDelta(),.05);const f=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));const s=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));const len=Math.hypot(f,s)||1;const speed=(flying&&movement.allow_flight?movement.fly_speed:movement.walk_speed||1.8)*d;const dx=(-Math.sin(yaw)*(f/len)+Math.cos(yaw)*(s/len))*speed;const dz=(-Math.cos(yaw)*(f/len)-Math.sin(yaw)*(s/len))*speed;const next=moveHorizontal(dx,dz);camera.position.x=next[0];camera.position.z=next[1];if(flying&&movement.allow_flight)camera.position.y+=(Number(keys.has(' '))-Number(keys.has('c')))*speed;for(const axis of ['x','y','z']){const bounds=movement.bounds[axis];if(bounds)camera.position[axis]=Math.max(bounds[0],Math.min(bounds[1],camera.position[axis]))}camera.rotation.set(pitch,yaw,0,'YXZ');updateHud();renderer.render(scene,camera)}loop();
+new GLTFLoader().parse(glbBytes.buffer,'',gltf=>{gltf.scene.traverse(object=>{const mesh=object;const material=mesh.material;if(mesh.isMesh){mesh.castShadow=activeLighting.shadows;mesh.receiveShadow=activeLighting.shadows}if(!material)return;const materials=Array.isArray(material)?material:[material];for(const entry of materials){entry.side=DoubleSide;if('emissive' in entry&&'color' in entry){entry.emissive.copy(entry.color);entry.emissiveIntensity=activeLighting.emissiveLift}entry.needsUpdate=true}});scene.add(gltf.scene)},undefined,error=>{loadFailed=true;hud.textContent='离线场景加载失败：'+error.message});
+const clock=new Clock();function loop(){requestAnimationFrame(loop);const d=Math.min(clock.getDelta(),.05);const f=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));const s=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));const len=Math.hypot(f,s)||1;const speed=(flying&&movement.allow_flight?movement.fly_speed:movement.walk_speed||1.8)*d;const dx=(-Math.sin(yaw)*(f/len)+Math.cos(yaw)*(s/len))*speed;const dz=(-Math.cos(yaw)*(f/len)-Math.sin(yaw)*(s/len))*speed;const next=moveHorizontal(dx,dz);camera.position.x=next[0];camera.position.z=next[1];if(flying&&movement.allow_flight)camera.position.y+=(Number(keys.has(' '))-Number(keys.has('c')))*speed;for(const axis of ['x','y','z']){const bounds=movement.bounds[axis];if(bounds)camera.position[axis]=Math.max(bounds[0],Math.min(bounds[1],camera.position[axis]))}camera.rotation.set(pitch,yaw,0,'YXZ');if(mediaRecorder&&recordTrace)recordTrace.frames.push({at_ms:Number((performance.now()-recordStartedAt).toFixed(3)),delta_ms:d*1000,position:[camera.position.x,camera.position.y,camera.position.z],yaw,pitch,keys:Array.from(keys).sort()});updateHud();renderer.render(scene,camera)}loop();
 </script></body></html>"""
 
 
@@ -422,7 +444,13 @@ def _write_manifest(
     scene_path.parent.joinpath("manifest.json").write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
 
 
-def _generate_version(job: Job, record: dict, plan: PhotoPlan, version: str) -> str:
+def _generate_version(
+    job: Job,
+    record: dict,
+    plan: PhotoPlan,
+    version: str,
+    stage_callback=None,
+) -> str:
     scene_id = uuid.uuid4().hex
     scene_path = settings.scenes_dir / scene_id / "scene.glb"
     world_scale_override = None
@@ -442,6 +470,7 @@ def _generate_version(job: Job, record: dict, plan: PhotoPlan, version: str) -> 
         Path(record["path"]), scene_path, mock=settings.mock_geometry, settings=settings,
         version=version, template=job.selected_template, world_scale_override=world_scale_override,
         manual_regions=job.region_confirmations, quality_route=job.quality_route,
+        stage_callback=stage_callback,
     )
     source_path = scene_path.parent / "source.jpg"
     with Image.open(record["path"]) as source_image:
@@ -454,6 +483,8 @@ def _generate_version(job: Job, record: dict, plan: PhotoPlan, version: str) -> 
         except Exception as exc:
             context_shell = {"enabled": False, "status": "failed", "error": type(exc).__name__}
     quality_metrics = inspect_scene(scene_path)
+    if stage_callback:
+        stage_callback("machine_check", 92, "质量路线：机器结构检查已完成，等待视觉复核")
     quality_metrics["geometry_cleanup"] = {
         "removed_extreme_faces": int(result.get("removed_extreme_faces", 0)),
         "policy": "drop_faces_over_20x_median_edge",
@@ -598,7 +629,12 @@ def _run_job(job_id: str, record: dict, plan: PhotoPlan) -> None:
             job.progress = 8
             job.message = "质量路线：分析、深度与相机"
             _save_job(job)
-            quality_id = _generate_version(job, record, plan, "full")
+            def report_quality_stage(stage: str, progress: int, message: str) -> None:
+                job.progress = progress
+                job.message = message
+                _save_job(job)
+
+            quality_id = _generate_version(job, record, plan, "full", stage_callback=report_quality_stage)
             job.stage_timings_ms["quality_generation"] = round((time.perf_counter() - quality_started) * 1000)
             job.quick_scene_id = quality_id
             job.scene_id = quality_id
