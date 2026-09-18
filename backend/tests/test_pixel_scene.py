@@ -27,6 +27,8 @@ from app.services.pixel_scene import (
     build_pixel_living_v37,
     PIXEL_V38_LAYOUT_VERSION,
     build_pixel_living_v38,
+    PIXEL_V39_LAYOUT_VERSION,
+    build_pixel_corridor_v39,
 )
 
 
@@ -268,3 +270,21 @@ def test_pixel_v38_adds_pixel_material_hierarchy_without_changing_collision(tmp_
     assert "upholstery_pixel_surface" in roles
     assert "rug_pixel_surface" in roles
     assert "display_light_detail" in roles
+
+
+def test_pixel_v39_corridor_adds_fine_surface_hierarchy_without_new_collision(tmp_path: Path):
+    source = tmp_path / "corridor.png"
+    Image.new("RGB", (48, 32), (205, 210, 212)).save(source)
+    output = tmp_path / "corridor-v39"
+
+    manifest = build_pixel_corridor_v39(source, output, "pixel-v39-i01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v39"
+    assert manifest["layout_version"] == PIXEL_V39_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "indoor_pixel_detail_v4"
+    assert len(manifest["movement"]["collision_boxes"]) == 6
+    assert "window_pixel_surface" in roles
+    assert "door_pixel_surface" in roles
+    assert "ceiling_light_detail" in roles

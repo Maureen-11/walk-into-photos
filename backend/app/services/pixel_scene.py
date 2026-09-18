@@ -6557,3 +6557,149 @@ def build_pixel_living_v38(image_path: Path, output_dir: Path, scene_id: str = "
         encoding="utf-8",
     )
     return manifest
+
+
+# V39 applies the same fine-pixel material language to I01.  The corridor has
+# fewer furniture anchors than I02, so its precision comes from window/door
+# depth, tile cadence, wall rails and a repeated ceiling-light rhythm.
+PIXEL_V39_LAYOUT_VERSION = "pixel-v39-i01-pixel-material-light-pass-33"
+
+
+def build_pixel_corridor_v39(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r39-i01") -> dict[str, object]:
+    build_pixel_corridor_v36(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_yz(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_yz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    contour = _mix(dark, trim, 0.08)
+    glass_dark = _mix(window, dark, 0.42)
+    glass_mid = _mix(window, accent, 0.24)
+    glass_high = _mix(window, wall, 0.20)
+    door_mid = _mix(wood, wall, 0.18)
+    door_light = _mix(wood, lamp, 0.12)
+
+    for index, z in enumerate((3.50, 0.0, -3.50, -7.0)):
+        add_detail(f"pixel-q05-r39-i01-window-contour-left-{index}", (0.045, 2.30, 0.045), (-2.12, 1.55, z), contour, "window_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+        add_detail(f"pixel-q05-r39-i01-window-sill-left-{index}", (0.06, 0.08, 1.72), (-2.10, 0.72, z), _mix(trim, wall, 0.12), "window_frame_detail", "photo_supported_window_sill", FURNITURE_VOXEL)
+        add_yz(
+            f"pixel-q05-r39-i01-window-fine-reflection-{index}",
+            ("..aaaa..", ".abbbba.", "abacccba", "abccccba", "abacccba", ".abbbba.", "..aaaa.."),
+            (-2.075, 1.60, z + 0.08), (0.070, 0.095), 0.014,
+            {"a": contour, "b": glass_dark, "c": glass_high},
+            "window_pixel_surface", "photo_supported_window_opening",
+        )
+        for light_index, offset in enumerate((-0.28, 0.02, 0.32)):
+            add_detail(f"pixel-q05-r39-i01-window-city-light-{index}-{light_index}", (0.045, 0.045, 0.025), (-2.045, 1.22 + light_index * 0.22, z + offset), _mix(glass_mid, lamp, 0.16), "window_light_detail", "photo_palette_upper", MICRO_VOXEL)
+
+        add_detail(f"pixel-q05-r39-i01-door-contour-right-{index}", (0.045, 2.50, 0.045), (2.10, 1.48, z), contour, "door_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+        add_yz(
+            f"pixel-q05-r39-i01-door-fine-panel-{index}",
+            ("aaaaaaaa", "abbbbbba", "abccddba", "abccccba", "abccddba", "abccccba", "abbbbbba", "aaaaaaaa"),
+            (2.06, 1.48, z), (0.075, 0.15), 0.014,
+            {"a": contour, "b": door_mid, "c": _mix(wood, accent, 0.12), "d": door_light},
+            "door_pixel_surface", "photo_supported_door_panel",
+        )
+        add_detail(f"pixel-q05-r39-i01-door-warm-handle-{index}", (0.035, 0.09, 0.055), (2.02, 1.48, z - 0.18), _mix(lamp, metal, 0.24), "door_light_detail", "photo_supported_door_hardware", MICRO_VOXEL)
+
+    # Alternating tile bands and small reflected-window pixels keep the long
+    # corridor floor from reading as a single untextured plane.
+    tile_dark = _mix(floor, trim, 0.34)
+    tile_light = _mix(floor, window, 0.12)
+    for row, z in enumerate((4.65, 3.50, 2.35, 1.20, 0.05, -1.10, -2.25, -3.40, -4.55, -5.70, -6.85, -8.0)):
+        add_detail(f"pixel-q05-r39-i01-floor-tile-contour-{row}", (4.10, 0.014, 0.028), (0.0, 0.225, z), tile_dark, "floor_tile_contour", "pixel_style_material_break", MICRO_VOXEL)
+        for column, x in enumerate((-1.54, -0.84, -0.14, 0.56, 1.26)):
+            if (row + column) % 3 != 1:
+                add_detail(f"pixel-q05-r39-i01-floor-reflection-{row}-{column}", (0.22, 0.012, 0.08), (x, 0.244, z - 0.10), tile_light, "floor_reflection_detail", "photo_supported_window_light", MICRO_VOXEL)
+
+    # Recessed ceiling fixtures get dark outlines, warm cores and a short cool
+    # edge, giving the same deliberate light-source vocabulary as the sample
+    # pixel references without applying a global glow.
+    for index, z in enumerate((4.30, 2.20, 0.10, -2.00, -4.20, -6.40, -8.50)):
+        add_detail(f"pixel-q05-r39-i01-ceiling-light-contour-{index}", (0.72, 0.04, 0.34), (0.0, 3.72, z), contour, "ceiling_light_contour", "pixel_style_contour_rule", FURNITURE_VOXEL)
+        add_detail(f"pixel-q05-r39-i01-ceiling-light-core-{index}", (0.44, 0.018, 0.16), (0.0, 3.67, z), _mix(lamp, wall, 0.16), "ceiling_light_detail", "photo_supported_ceiling_light", MICRO_VOXEL)
+        add_detail(f"pixel-q05-r39-i01-ceiling-light-cool-edge-{index}", (0.28, 0.014, 0.025), (0.0, 3.64, z - 0.10), _mix(window, lamp, 0.24), "ceiling_light_detail", "photo_palette_upper", MICRO_VOXEL)
+
+    # Small wall plaques and a continuous rail provide the corridor's human
+    # scale and break the broad side walls into designed sections.
+    add_detail("pixel-q05-r39-i01-right-handrail-contour", (0.045, 0.10, 12.80), (2.05, 1.02, -1.80), contour, "wall_handrail_contour", "pixel_style_contour_rule", MICRO_VOXEL)
+    for index, z in enumerate((2.80, 0.90, -1.00, -2.90, -4.80, -6.70)):
+        add_xy(
+            f"pixel-q05-r39-i01-wall-plaque-{index}",
+            ("aaaaaa", "abbbba", "abccba", "abbbba", "aaaaaa"),
+            (2.015, 2.35, z), (0.08, 0.08), 0.012,
+            {"a": contour, "b": _mix(wall, trim, 0.18), "c": _mix(accent, lamp, 0.16)},
+            "wall_plaque_pixel_surface", "procedural_corridor_wayfinding",
+        )
+
+    layout_version = PIXEL_V39_LAYOUT_VERSION
+    detail_pass = "v39-i01-pixel-material-light-pass-33"
+    route_name = "pixel_style_sample_v39"
+    generated_regions = [
+        "window_contour_and_reflection_pixels", "door_fine_panel_pixels",
+        "floor_tile_contours_and_reflections", "ceiling_light_pixel_sources",
+        "corridor_handrail_and_wayfinding_plaques",
+    ]
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = "q05_i01_pixel_material_and_light_pass"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = "indoor_pixel_detail_v4"
+    layout["pixel_spec"]["surface_density_policy"] = "micro_pixel_material_steps_and_dark_contours_no_uniform_noise"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v39"
+    manifest["provider_version"] = "pixel-voxel-v39"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = (
+        "像素风 V39 I01 微像素材质与光影候选：继承 V36 的走廊结构、窗门、碰撞和路线，"
+        "加入深色轮廓、窗外反射像素、门板细分、地砖反射、顶灯语义光源和墙面导视节奏；"
+        "不改变可行走空间，不使用整图投影。"
+    )
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = "candidate_corridor_pixel_material_light_hierarchy"
+    manifest["quality_metrics"]["lighting_status"] = "candidate_indoor_pixel_detail_v4"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = "indoor_pixel_detail_v4"
+    manifest["pixel_spec"]["surface_density_policy"] = "micro_pixel_material_steps_and_dark_contours_no_uniform_noise"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        "Luna 像素风样板 V39 · I01 走廊微像素材质与光影候选\n\n"
+        "继承走廊空间和碰撞，增加窗门细像素、地砖反射、顶灯光源和墙面导视层。\n"
+        "质量状态仍为 unverified。\n",
+        encoding="utf-8",
+    )
+    return manifest
