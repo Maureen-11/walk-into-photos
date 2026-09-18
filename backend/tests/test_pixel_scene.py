@@ -29,6 +29,12 @@ from app.services.pixel_scene import (
     build_pixel_living_v38,
     PIXEL_V39_LAYOUT_VERSION,
     build_pixel_corridor_v39,
+    PIXEL_V40_LAYOUT_VERSION,
+    build_pixel_nature_v40,
+    PIXEL_V41_LAYOUT_VERSION,
+    build_pixel_street_v41,
+    PIXEL_V42_LAYOUT_VERSION,
+    build_pixel_building_v42,
 )
 
 
@@ -288,3 +294,57 @@ def test_pixel_v39_corridor_adds_fine_surface_hierarchy_without_new_collision(tm
     assert "window_pixel_surface" in roles
     assert "door_pixel_surface" in roles
     assert "ceiling_light_detail" in roles
+
+
+def test_pixel_v40_nature_adds_ordered_snow_and_fence_layers_without_new_collision(tmp_path: Path):
+    source = tmp_path / "nature.png"
+    Image.new("RGB", (48, 32), (184, 205, 226)).save(source)
+    output = tmp_path / "nature-v40"
+
+    manifest = build_pixel_nature_v40(source, output, "pixel-v40-n01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v40"
+    assert manifest["layout_version"] == PIXEL_V40_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "outdoor_cool_daylight_v2"
+    assert len(manifest["movement"]["collision_boxes"]) == 3
+    assert "mountain_pixel_facet" in roles
+    assert "snow_track_detail" in roles
+    assert "foreground_fence_detail" in roles
+
+
+def test_pixel_v41_street_adds_surface_and_vehicle_layers_without_new_collision(tmp_path: Path):
+    source = tmp_path / "street.png"
+    Image.new("RGB", (48, 32), (184, 205, 226)).save(source)
+    output = tmp_path / "street-v41"
+
+    manifest = build_pixel_street_v41(source, output, "pixel-v41-s01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v41"
+    assert manifest["layout_version"] == PIXEL_V41_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "street_soft_daylight_v3"
+    assert len(manifest["movement"]["collision_boxes"]) == 11
+    assert "road_surface_contour" in roles
+    assert "vehicle_pixel_surface" in roles
+    assert "building_window_pixel_surface" in roles
+
+
+def test_pixel_v42_building_adds_facade_light_layers_without_new_collision(tmp_path: Path):
+    source = tmp_path / "building.png"
+    Image.new("RGB", (48, 32), (18, 26, 54)).save(source)
+    output = tmp_path / "building-v42"
+
+    manifest = build_pixel_building_v42(source, output, "pixel-v42-b01-test")
+    layout = json.loads((output / "layout.json").read_text(encoding="utf-8"))
+    roles = {item["role"] for item in layout["objects"]}
+
+    assert manifest["style_route"] == "pixel_style_sample_v42"
+    assert manifest["layout_version"] == PIXEL_V42_LAYOUT_VERSION
+    assert manifest["pixel_spec"]["lighting_preset"] == "facade_blue_hour_v3"
+    assert len(manifest["movement"]["collision_boxes"]) == 1
+    assert "facade_contour" in roles
+    assert "facade_window_pixel_surface" in roles
+    assert "balcony_light_detail" in roles

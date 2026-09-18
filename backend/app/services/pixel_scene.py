@@ -6703,3 +6703,341 @@ def build_pixel_corridor_v39(image_path: Path, output_dir: Path, scene_id: str =
         encoding="utf-8",
     )
     return manifest
+
+
+# V40-V42 carry the fine-pixel material language to the three exterior
+# samples.  These are render-only surface passes: they inherit the reviewed
+# camera, route and collision contracts from V33/V35 and do not add collision
+# boxes.  The intent is to make the existing semantic anchors read as authored
+# pixel art from the start view and after a turn, rather than merely increasing
+# the number of undifferentiated blocks.
+PIXEL_V40_LAYOUT_VERSION = "pixel-v40-n01-pixel-material-light-pass-34"
+PIXEL_V41_LAYOUT_VERSION = "pixel-v41-s01-pixel-material-light-pass-34"
+PIXEL_V42_LAYOUT_VERSION = "pixel-v42-b01-pixel-material-light-pass-34"
+
+
+def _finalize_exterior_pixel_pass(
+    image_path: Path,
+    output_dir: Path,
+    scene: trimesh.Scene,
+    layout: dict[str, object],
+    collision: dict[str, object],
+    manifest: dict[str, object],
+    details: list[str],
+    layout_version: str,
+    route_name: str,
+    detail_pass: str,
+    authoring: str,
+    note: str,
+    generated_regions: list[str],
+    lighting_preset: str,
+    semantic_status: str,
+) -> dict[str, object]:
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = authoring
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["lighting_preset"] = lighting_preset
+    layout["pixel_spec"]["surface_density_policy"] = "ordered_micro_pixel_material_steps_dark_contours_semantic_lights_no_uniform_noise"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+
+    manifest["version"] = route_name.replace("pixel_style_sample_v", "pixel-v")
+    manifest["provider_version"] = f"pixel-voxel-{route_name.rsplit('v', 1)[-1]}"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = note
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = semantic_status
+    manifest["quality_metrics"]["lighting_status"] = f"candidate_{lighting_preset}"
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["lighting_preset"] = lighting_preset
+    manifest["pixel_spec"]["surface_density_policy"] = "ordered_micro_pixel_material_steps_dark_contours_semantic_lights_no_uniform_noise"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        f"Luna 像素风样板 {route_name} · 外部细像素材质与光影候选\n\n"
+        f"{note}\n视觉质量仍为 unverified；新增表面细节不参与碰撞。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def build_pixel_nature_v40(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r40-n01") -> dict[str, object]:
+    build_pixel_nature_v33(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout = json.loads((output_dir / "layout.json").read_text(encoding="utf-8"))
+    collision = json.loads((output_dir / "collision.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    scene = trimesh.load(scene_path, force="scene")
+    roles = layout["palette"]["roles"]
+    floor, window = roles["floor"], roles["window"]
+    trim, dark, accent, lamp = roles["trim"], roles["dark"], roles["accent"], roles["lamp"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    snow_light = _mix(window, [255, 255, 248], 0.46)
+    snow_mid = _mix(window, accent, 0.22)
+    snow_shadow = _mix(window, dark, 0.40)
+    contour = _mix(dark, trim, 0.16)
+
+    # Three depth bands use different facet scales.  The ordered chevrons make
+    # the mountain silhouette and snow direction readable without turning the
+    # entire terrain into random checker noise.
+    facet_patterns = {
+        "near": ("..aaaa..", ".abbbba.", "abacccba", "abccccba", "abacccba", ".abbbba.", "..aaaa.."),
+        "mid": ("..aaa..", ".abbbba.", "abcccba", ".abbbba.", "..aaa.."),
+        "far": (".aaa.", "abcca", "abccb", ".aaa."),
+    }
+    facet_specs = (
+        ("near", -7.2, 0.44, 0.20, 0.15, 1.75),
+        ("mid", -12.7, 0.31, 0.16, 0.12, 1.35),
+        ("far", -17.3, 0.20, 0.12, 0.09, 0.96),
+    )
+    for ridge_name, z, y, cell_x, cell_y, spread in facet_specs:
+        pattern = facet_patterns[ridge_name]
+        for index, x in enumerate((-7.0, -4.1, -1.2, 1.8, 4.8)):
+            add_xy(
+                f"pixel-q05-r40-n01-{ridge_name}-snow-facet-{index}", pattern,
+                (x, y, z), (cell_x, cell_y), 0.022,
+                {"a": contour, "b": snow_shadow, "c": snow_light},
+                "mountain_pixel_facet", "photo_supported_snow_ridge",
+            )
+            add_detail(
+                f"pixel-q05-r40-n01-{ridge_name}-facet-cap-{index}", (spread, 0.026, 0.045),
+                (x, y + 0.42, z - 0.08), snow_light, "mountain_pixel_highlight", "photo_supported_snow_ridge", MICRO_VOXEL,
+            )
+
+    # Keep the foreground's broad snow plane readable with a small number of
+    # stepped shadow ribbons and directional track pixels.
+    for index, (x, z, width) in enumerate(((-4.3, 5.2, 2.0), (-1.9, 4.1, 1.25), (2.5, 2.65, 1.7), (-3.6, -0.05, 1.45), (3.2, -3.25, 1.85), (-1.4, -5.55, 1.28))):
+        add_detail(
+            f"pixel-q05-r40-n01-snow-contour-band-{index}", (width, 0.024, 0.12),
+            (x, 0.285, z), snow_shadow if index % 2 else snow_mid,
+            "snow_surface_contour", "photo_supported_near_ground", MICRO_VOXEL,
+        )
+    for index, (x, z) in enumerate(((-0.30, 5.35), (0.22, 4.72), (-0.24, 4.05), (0.28, 3.38), (-0.22, 2.71), (0.28, 2.04), (-0.24, 1.37), (0.28, 0.70), (-0.24, 0.03), (0.28, -0.64), (-0.24, -1.31), (0.28, -1.98), (-0.24, -2.65), (0.28, -3.32), (-0.24, -3.99), (0.28, -4.66), (-0.24, -5.33))):
+        add_detail(
+            f"pixel-q05-r40-n01-track-highlight-{index}", (0.24, 0.026, 0.10),
+            (x, 0.305, z), _mix(snow_shadow, floor, 0.24),
+            "snow_track_detail", "photo_supported_near_ground", MICRO_VOXEL,
+        )
+
+    # The fence is a strong foreground anchor in the photograph.  Add small
+    # cap/brace highlights and alternating wire segments to make it readable
+    # after a turn without changing its inherited non-blocking collision rule.
+    fence = _mix(dark, window, 0.24)
+    for index, x in enumerate((-4.5, -3.0, -1.5, 0.0, 1.5, 3.0, 4.5)):
+        add_detail(f"pixel-q05-r40-n01-fence-cap-{index}", (0.14, 0.10, 0.14), (x, 2.22, 6.0), _mix(fence, lamp, 0.10), "foreground_fence_detail", "photo_supported_foreground_fence", FURNITURE_VOXEL)
+        for wire, y in enumerate((1.60, 1.12, 0.64)):
+            add_detail(f"pixel-q05-r40-n01-fence-wire-pixel-{index}-{wire}", (0.50, 0.025, 0.025), (x + 0.25, y, 6.0), _mix(fence, snow_mid, 0.12 if wire == 1 else 0.0), "foreground_fence_detail", "photo_supported_foreground_fence", MICRO_VOXEL)
+
+    return _finalize_exterior_pixel_pass(
+        image_path, output_dir, scene, layout, collision, manifest, details,
+        PIXEL_V40_LAYOUT_VERSION, "pixel_style_sample_v40", "v40-n01-pixel-material-light-pass-34",
+        "q05_n01_fine_pixel_ridge_snow_fence_surface",
+        "像素风 V40 N01 雪山细像素材质候选：继承 V33 的分层山体、冷色日光、碰撞和路线，"
+        "补充近中远雪脊的方向性像素面、前景雪影/足迹和围栏线层；只增加视觉细节，不把远景或天空当作可走地面。",
+        ["ridge_directional_pixel_facets", "snow_contour_bands", "snow_track_highlights", "fence_wire_pixel_layers"],
+        "outdoor_cool_daylight_v2", "candidate_nature_pixel_material_light_hierarchy",
+    )
+
+
+def build_pixel_street_v41(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r41-s01") -> dict[str, object]:
+    build_pixel_street_v35(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout = json.loads((output_dir / "layout.json").read_text(encoding="utf-8"))
+    collision = json.loads((output_dir / "collision.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    scene = trimesh.load(scene_path, force="scene")
+    roles = layout["palette"]["roles"]
+    floor, wall = roles["floor"], roles["wall"]
+    wood, metal, window = roles["wood"], roles["metal"], roles["window"]
+    plant, lamp, dark, accent, trim = roles["plant"], roles["lamp"], roles["dark"], roles["accent"], roles["trim"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    road_dark = _mix(floor, dark, 0.32)
+    road_light = _mix(floor, window, 0.22)
+    lane = _mix(_mix(wood, lamp, 0.18), [190, 72, 66], 0.55)
+    lane_high = _mix(lane, lamp, 0.20)
+    vehicle_dark = _mix(metal, dark, 0.20)
+    vehicle_glass = _mix(window, accent, 0.22)
+
+    # Add a restrained road contour cadence.  The markings sit on the actual
+    # road surface and use long/short segments to reinforce depth rather than
+    # covering it with a flat texture.
+    for index, z in enumerate((6.0, 4.65, 3.30, 1.95, 0.60, -0.75, -2.10, -3.45, -4.80, -6.15, -7.50, -8.85, -10.20)):
+        add_detail(f"pixel-q05-r41-s01-road-contour-{index}", (0.08, 0.024, 0.70 if index % 2 else 0.46), (0.0, 0.245, z), road_dark, "road_surface_contour", "photo_supported_road_surface", MICRO_VOXEL)
+        add_detail(f"pixel-q05-r41-s01-road-glint-{index}", (0.24 if index % 2 else 0.14, 0.018, 0.025), (0.42, 0.27, z - 0.22), road_light, "road_surface_detail", "photo_supported_road_surface", MICRO_VOXEL)
+    for index, z in enumerate((4.55, 2.85, 1.15, -0.55, -2.25, -3.95, -5.65)):
+        add_detail(f"pixel-q05-r41-s01-bike-lane-highlight-{index}", (0.11, 0.028, 0.52), (-3.10, 0.345, z), lane_high, "road_marking_detail", "photo_supported_bike_lane", MICRO_VOXEL)
+
+    # Vehicles gain a readable windshield, cabin split, grille and lamp order;
+    # each layer remains render-only and is kept within the inherited proxy.
+    for index, (x, z, body) in enumerate(((-2.55, 1.2, wood), (2.65, -4.0, metal))):
+        add_xy(
+            f"pixel-q05-r41-s01-vehicle-face-{index}",
+            (".aaaa.", "abbbba", "acccca", "abddba", ".aaaa."),
+            (x, 0.84, z + 1.34), (0.15, 0.10), 0.026,
+            {"a": vehicle_dark, "b": _mix(body, vehicle_glass, 0.28), "c": vehicle_glass, "d": lamp},
+            "vehicle_pixel_surface", "photo_supported_vehicle",
+        )
+        add_detail(f"pixel-q05-r41-s01-vehicle-bumper-{index}", (1.08, 0.055, 0.06), (x, 0.40, z + 1.34), _mix(trim, dark, 0.16), "vehicle_pixel_detail", "photo_supported_vehicle", MICRO_VOXEL)
+        for lamp_index, x_offset in enumerate((-0.42, 0.42)):
+            add_detail(f"pixel-q05-r41-s01-vehicle-lamp-{index}-{lamp_index}", (0.13, 0.10, 0.03), (x + x_offset, 0.63, z + 1.37), _mix(lamp, window, 0.18), "vehicle_light_detail", "photo_supported_vehicle", MICRO_VOXEL)
+
+    # The front-facing side masses receive small window groups and facade
+    # bands, giving the street a layered city rhythm while preserving the
+    # original building proxies and open route.
+    for side, x in (("left", -6.0), ("right", 6.0)):
+        for building_index, z in enumerate((3.6, -2.0, -7.6)):
+            front_z = z + 2.16
+            for row_index, y in enumerate((1.30, 2.22, 3.14, 4.06)):
+                add_xy(
+                    f"pixel-q05-r41-s01-{side}-building-{building_index}-window-pixels-{row_index}",
+                    (".aaa.", "abcca", "abdda", ".aaa."),
+                    (x, y, front_z), (0.12, 0.13), 0.020,
+                    {"a": _mix(dark, trim, 0.10), "b": _mix(window, wall, 0.10), "c": window, "d": _mix(window, lamp, 0.18)},
+                    "building_window_pixel_surface", "photo_supported_window_line",
+                )
+            add_detail(f"pixel-q05-r41-s01-{side}-building-{building_index}-facade-shadow", (1.60, 0.045, 0.06), (x, 0.88, front_z + 0.025), _mix(wall, dark, 0.26), "building_facade_contour", "photo_inferred_background_building", MICRO_VOXEL)
+
+    # Canopy clusters receive a dark branch step and a few bright leaf pixels;
+    # this is enough to separate near foliage from the sidewalk without noise.
+    for tree_index, (x, z) in enumerate(((-4.45, 4.25), (4.35, -8.50), (-4.50, -11.0), (4.45, 1.50))):
+        add_detail(f"pixel-q05-r41-s01-tree-trunk-contour-{tree_index}", (0.08, 1.20, 0.08), (x, 1.45, z), _mix(wood, dark, 0.28), "tree_structure_detail", "photo_inferred_tree", MICRO_VOXEL)
+        for leaf_index, (dx, dy, dz, colour) in enumerate((
+            (-0.52, 2.24, 0.0, _shade(plant, 0.62)), (-0.24, 2.48, 0.04, plant),
+            (0.06, 2.28, 0.0, _mix(plant, window, 0.14)), (0.38, 2.62, -0.02, _shade(plant, 0.78)),
+            (0.0, 2.90, 0.0, _mix(plant, lamp, 0.08)),
+        )):
+            add_detail(f"pixel-q05-r41-s01-tree-leaf-pixel-{tree_index}-{leaf_index}", (0.34, 0.22, 0.28), (x + dx, dy, z + dz), colour, "tree_pixel_surface", "photo_supported_tree_canopy", FURNITURE_VOXEL)
+
+    return _finalize_exterior_pixel_pass(
+        image_path, output_dir, scene, layout, collision, manifest, details,
+        PIXEL_V41_LAYOUT_VERSION, "pixel_style_sample_v41", "v41-s01-pixel-material-light-pass-34",
+        "q05_s01_fine_pixel_road_vehicle_facade_tree_surface",
+        "像素风 V41 S01 街道细像素材质候选：继承 V35 的道路、车道、人车树分离、碰撞和路线，"
+        "增加道路轮廓与反光节奏、车辆前脸像素、侧面建筑窗格和树冠明暗层；新增件不参与碰撞。",
+        ["road_contour_and_glints", "vehicle_pixel_faces", "street_facade_window_pixels", "tree_pixel_surface_layers"],
+        "street_soft_daylight_v3", "candidate_street_pixel_material_light_hierarchy",
+    )
+
+
+def build_pixel_building_v42(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r42-b01") -> dict[str, object]:
+    build_pixel_building_v35(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout = json.loads((output_dir / "layout.json").read_text(encoding="utf-8"))
+    collision = json.loads((output_dir / "collision.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    scene = trimesh.load(scene_path, force="scene")
+    roles = layout["palette"]["roles"]
+    wall, trim, window = roles["wall"], roles["trim"], roles["window"]
+    wood, metal, lamp = roles["wood"], roles["metal"], roles["lamp"]
+    plant, dark, accent = roles["plant"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    contour = _mix(dark, trim, 0.12)
+    facade_mid = _mix(wall, trim, 0.24)
+    glass_dark = _mix(window, dark, 0.34)
+    glass_mid = _mix(window, accent, 0.20)
+    glass_high = _mix(window, lamp, 0.18)
+    warm = _mix(lamp, accent, 0.18)
+
+    # Long facade courses make the large mass read as masonry panels rather
+    # than a single colored slab.  Short interruptions preserve the irregular
+    # night-city rhythm of the reference image.
+    for index, y in enumerate((0.72, 2.78, 4.84, 6.90, 8.96)):
+        add_detail(f"pixel-q05-r42-b01-facade-contour-course-{index}", (13.72, 0.05, 0.065), (0.0, y, -5.12), contour if index % 2 else facade_mid, "facade_contour", "photo_supported_facade_mass", MICRO_VOXEL)
+        for segment, x in enumerate((-5.85, -2.95, 0.0, 2.95, 5.85)):
+            if (index + segment) % 3 != 1:
+                add_detail(f"pixel-q05-r42-b01-facade-block-{index}-{segment}", (1.08, 0.035, 0.045), (x, y + 0.30, -5.08), _mix(facade_mid, trim, 0.12 * ((index + segment) % 2)), "facade_surface_detail", "photo_inferred_building_mass", MICRO_VOXEL)
+
+    # Each existing irregular window receives an authored four-value pixel
+    # core.  This gives the facade the compact local glow and pane separation
+    # visible in the supplied night reference without a full-photo projection.
+    window_specs = (
+        (-5.75, 1.20, 0.92, 0.82), (-3.75, 1.62, 0.70, 1.12), (-1.45, 1.18, 0.84, 0.78), (1.10, 1.64, 0.76, 1.16), (3.72, 1.20, 0.92, 0.84), (5.82, 1.82, 0.68, 1.26),
+        (-5.20, 3.45, 0.78, 0.94), (-2.80, 3.30, 0.98, 0.72), (-0.25, 3.66, 0.70, 1.12), (2.35, 3.18, 0.90, 0.88), (5.18, 3.58, 0.78, 1.02),
+        (-5.72, 5.62, 0.72, 1.04), (-3.35, 5.35, 0.94, 0.78), (-0.85, 5.74, 0.82, 1.08), (1.80, 5.42, 0.98, 0.82), (4.80, 5.78, 0.74, 1.12),
+        (-4.82, 7.55, 0.86, 0.82), (-2.15, 7.34, 0.70, 1.08), (0.55, 7.68, 0.92, 0.88), (3.38, 7.30, 0.74, 1.10), (5.82, 7.78, 0.78, 0.78),
+    )
+    for index, (x, y, width, height) in enumerate(window_specs):
+        warm_window = index % 3 != 1
+        add_xy(
+            f"pixel-q05-r42-b01-window-pixel-core-{index}",
+            (".aaaa.", "abbbba", "acccda", "abddba", ".aaaa."),
+            (x, y, -5.045), (max(0.10, width * 0.22), max(0.10, height * 0.19)), 0.020,
+            {"a": contour, "b": warm if warm_window else glass_dark, "c": glass_mid if warm_window else window, "d": glass_high if warm_window else _mix(window, accent, 0.10)},
+            "facade_window_pixel_surface", "photo_supported_lit_window",
+        )
+        add_detail(f"pixel-q05-r42-b01-window-sill-{index}", (width + 0.10, 0.035, 0.045), (x, y - height * 0.52, -5.02), _mix(trim, dark, 0.12), "facade_window_detail", "photo_supported_window_frame", MICRO_VOXEL)
+
+    # Balcony rails and service boxes get small lit nodes, making their depth
+    # visible from side views instead of disappearing into the facade.
+    balcony_specs = ((-3.90, 2.42, 1.75), (2.95, 3.98, 2.05), (-2.55, 5.92, 1.65), (4.35, 7.72, 1.85), (-5.30, 8.58, 1.35))
+    for index, (x, y, width) in enumerate(balcony_specs):
+        add_detail(f"pixel-q05-r42-b01-balcony-front-contour-{index}", (width, 0.045, 0.055), (x, y + 0.40, -4.60), contour, "balcony_contour", "photo_supported_balcony_layer", MICRO_VOXEL)
+        for rail_index in range(5):
+            rail_x = x - width * 0.42 + rail_index * width * 0.21
+            add_detail(f"pixel-q05-r42-b01-balcony-light-node-{index}-{rail_index}", (0.035, 0.07, 0.025), (rail_x, y + 0.48, -4.57), _mix(window, lamp, 0.16 if rail_index % 2 else 0.04), "balcony_light_detail", "photo_palette_lit_detail", MICRO_VOXEL)
+    for index, (x, y) in enumerate(((-6.05, 2.10), (5.40, 3.28), (-4.85, 6.22), (5.80, 7.35), (0.10, 9.08))):
+        add_detail(f"pixel-q05-r42-b01-service-box-face-{index}", (0.32, 0.18, 0.035), (x, y, -4.70), _mix(metal, window, 0.12), "facade_service_unit", "photo_supported_facade_service_unit", MICRO_VOXEL)
+        add_detail(f"pixel-q05-r42-b01-service-box-status-{index}", (0.08, 0.035, 0.018), (x + 0.10, y + 0.04, -4.67), lamp, "facade_service_unit", "photo_palette_lit_detail", MICRO_VOXEL)
+
+    # Foreground wires receive occasional bright nodes and vegetation gets
+    # two-tone leaf pixels; both are depth cues, not collision geometry.
+    for index, (x, y, z) in enumerate(((-8.0, 5.5, -1.6), (8.0, 4.0, -2.8), (-6.8, 1.0, -8.8))):
+        add_detail(f"pixel-q05-r42-b01-wire-node-{index}", (0.12, 0.12, 0.12), (x, y, z), _mix(lamp, accent, 0.20), "foreground_wire_detail", "photo_supported_foreground_wire", MICRO_VOXEL)
+    for index, (x, y, z) in enumerate(((-7.1, 7.6, -4.45), (-6.65, 8.1, -4.40), (-7.55, 8.25, -4.35), (6.85, 9.1, -4.48))):
+        add_detail(f"pixel-q05-r42-b01-leaf-shadow-{index}", (0.56, 0.30, 0.22), (x, y, z), _shade(plant, 0.58), "foreground_vegetation", "photo_supported_foreground_leaf", FURNITURE_VOXEL)
+        add_detail(f"pixel-q05-r42-b01-leaf-highlight-{index}", (0.24, 0.15, 0.12), (x + 0.15, y + 0.16, z + 0.02), _mix(plant, lamp, 0.16), "foreground_vegetation", "photo_supported_foreground_leaf", MICRO_VOXEL)
+
+    return _finalize_exterior_pixel_pass(
+        image_path, output_dir, scene, layout, collision, manifest, details,
+        PIXEL_V42_LAYOUT_VERSION, "pixel_style_sample_v42", "v42-b01-pixel-material-light-pass-34",
+        "q05_b01_fine_pixel_facade_window_balcony_light_surface",
+        "像素风 V42 B01 建筑细像素材质候选：继承 V35 的蓝调立面、错落暖窗、阳台、前景线、碰撞和外部路线，"
+        "增加立面分段轮廓、窗内局部像素光、阳台节点、服务盒和前景线/叶片层；仍只承诺外部观察。",
+        ["facade_contour_courses", "window_pixel_cores", "balcony_light_nodes", "service_box_pixels", "foreground_wire_leaf_layers"],
+        "facade_blue_hour_v3", "candidate_building_pixel_material_light_hierarchy",
+    )
