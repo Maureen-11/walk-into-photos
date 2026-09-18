@@ -5972,3 +5972,283 @@ def build_pixel_building_v20(image_path: Path, output_dir: Path, scene_id: str =
         )
 
     return _finalize_v20_building(image_path, output_dir, scene_id, scene, objects, collisions, movement, palette)
+
+
+# V36 is a focused indoor semantic-detail pass.  It keeps the reviewed V33
+# corridor and V31 living-room candidates as the geometry/collision baseline;
+# only visible, image-supported surface layers are added.  The goal is more
+# readable object separation, not a larger undifferentiated voxel count.
+PIXEL_V36_LAYOUT_VERSIONS = {
+    "corridor": "pixel-v36-i01-indoor-surface-separation-pass-30",
+    "living_room": "pixel-v36-i02-indoor-surface-separation-pass-30",
+}
+
+
+def _build_indoor_precision_v36(
+    image_path: Path,
+    output_dir: Path,
+    scene_id: str,
+    base_builder,
+    profile: str,
+) -> dict[str, object]:
+    base_builder(image_path, output_dir, scene_id)
+    scene_path = output_dir / "scene.glb"
+    layout_path = output_dir / "layout.json"
+    collision_path = output_dir / "collision.json"
+    manifest_path = output_dir / "manifest.json"
+    scene = trimesh.load(scene_path, force="scene")
+    layout = json.loads(layout_path.read_text(encoding="utf-8"))
+    collision = json.loads(collision_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    roles = layout["palette"]["roles"]
+    wall, floor = roles["wall"], roles["floor"]
+    trim, window = roles["trim"], roles["window"]
+    wood, metal = roles["wood"], roles["metal"]
+    sofa, plant = roles["sofa"], roles["plant"]
+    lamp, dark, accent = roles["lamp"], roles["dark"], roles["accent"]
+    objects = layout["objects"]
+    details: list[str] = []
+
+    def add_detail(name, size, position, colour, role, source, grid=MICRO_VOXEL):
+        _add_part(scene, objects, [], name, size, position, colour, role, source, grid=grid)
+        details.append(name)
+
+    def add_yz(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_yz(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    def add_xy(prefix, pattern, centre, cell, depth, colours, role, source):
+        _add_pattern_xy(scene, objects, prefix, pattern, centre, cell, depth, colours, role, source, grid=MICRO_VOXEL)
+        details.append(prefix)
+
+    if profile == "corridor":
+        glass_dark = _mix(window, dark, 0.34)
+        glass_high = _mix(window, wall, 0.22)
+        wood_mid = _mix(wood, wall, 0.20)
+        metal_high = _mix(metal, lamp, 0.18)
+
+        # Add a second, thinner frame hierarchy to the window bays.  The
+        # existing V33 panes remain visible behind these rails, so the result
+        # reads as glass + mullion + sill rather than a single coloured wall.
+        for index, z in enumerate((3.50, 0.0, -3.50, -7.0)):
+            add_detail(
+                f"pixel-q05-r36-i01-window-sill-{index}", (0.07, 0.10, 1.72),
+                (-2.16, 0.72, z), _mix(trim, wall, 0.14),
+                "window_frame_detail", "photo_supported_window_sill", FURNITURE_VOXEL,
+            )
+            add_detail(
+                f"pixel-q05-r36-i01-window-centre-mullion-{index}", (0.07, 1.86, 0.06),
+                (-2.14, 1.55, z), trim,
+                "window_frame_detail", "photo_supported_window_frame", MICRO_VOXEL,
+            )
+            add_yz(
+                f"pixel-q05-r36-i01-window-reflection-{index}",
+                ("..aa..", ".abb a.".replace(" ", ""), "abccba", ".abb a.".replace(" ", ""), "..aa.."),
+                (-2.105, 1.70, z + 0.18), (0.075, 0.11), 0.014,
+                {"a": glass_dark, "b": glass_high, "c": _mix(window, accent, 0.18)},
+                "window_reflection_pixel", "photo_palette_upper",
+            )
+
+        # The source corridor has a long wall rail and a repeating ceiling
+        # service/lighting rhythm.  These small pieces give scale to the long
+        # room without changing its walkable shell.
+        add_detail(
+            "pixel-q05-r36-i01-right-wall-handrail", (0.055, 0.10, 12.80),
+            (2.16, 1.02, -1.80), _mix(metal, trim, 0.22),
+            "wall_handrail_detail", "photo_supported_wall_rail", FURNITURE_VOXEL,
+        )
+        for index, z in enumerate((3.92, 1.82, -0.28, -2.38, -4.48, -6.58, -8.68)):
+            add_detail(
+                f"pixel-q05-r36-i01-ceiling-vent-{index}", (0.42, 0.035, 0.24),
+                (0.0, 3.70, z), _mix(metal, dark, 0.24),
+                "ceiling_service_detail", "photo_supported_ceiling_service", FURNITURE_VOXEL,
+            )
+            add_detail(
+                f"pixel-q05-r36-i01-ceiling-vent-light-{index}", (0.24, 0.018, 0.035),
+                (0.0, 3.66, z - 0.08), _mix(lamp, wall, 0.20),
+                "ceiling_service_detail", "photo_supported_ceiling_light", MICRO_VOXEL,
+            )
+        for index, z in enumerate((4.70, 3.55, 2.40, 1.25, 0.10, -1.05, -2.20, -3.35, -4.50, -5.65, -6.80, -7.95)):
+            add_detail(
+                f"pixel-q05-r36-i01-floor-grout-highlight-{index}", (3.40, 0.014, 0.018),
+                (0.0, 0.226, z), _mix(floor, trim, 0.24),
+                "floor_surface_detail", "photo_supported_floor_tile", MICRO_VOXEL,
+            )
+
+        # Split the door face into inset, trim and hardware highlights.  The
+        # repeated pattern is a material rule, not a claim that every hidden
+        # door has been reconstructed from the photograph.
+        for index, z in enumerate((3.50, 0.0, -3.50, -7.0)):
+            add_detail(
+                f"pixel-q05-r36-i01-door-inset-{index}", (0.05, 1.28, 0.58),
+                (2.15, 1.54, z), wood_mid,
+                "door_panel_surface", "photo_supported_door_panel", FURNITURE_VOXEL,
+            )
+            for band, y in enumerate((0.58, 1.12, 2.30)):
+                add_detail(
+                    f"pixel-q05-r36-i01-door-trim-{index}-{band}", (0.035, 0.035, 0.64),
+                    (2.12, y, z), _mix(wood, trim, 0.26),
+                    "door_panel_surface", "photo_supported_door_trim", MICRO_VOXEL,
+                )
+            add_detail(
+                f"pixel-q05-r36-i01-door-hardware-{index}", (0.035, 0.10, 0.055),
+                (2.09, 1.48, z - 0.16), metal_high,
+                "door_hardware_detail", "photo_supported_door_hardware", MICRO_VOXEL,
+            )
+
+        layout_version = PIXEL_V36_LAYOUT_VERSIONS["corridor"]
+        detail_pass = "v36-i01-indoor-surface-separation-pass-30"
+        generated_regions = [
+            "window_mullion_and_reflection_layers", "corridor_handrail_scale_cue",
+            "ceiling_service_rhythm", "floor_grout_rhythm", "door_inset_hardware_layers",
+        ]
+        note = (
+            "像素风 V36 I01 走廊表面分离候选：继承 V33 的窗门、地砖、顶灯、碰撞和路线，"
+            "增加窗台/中挺/反射小层、墙面扶手、顶面服务节奏、地砖缝和门板硬件；"
+            "新增件只参与视觉表达，不改变可行走空间。"
+        )
+        quality_status = "candidate_indoor_surface_separation"
+    else:
+        sofa_light = _mix(sofa, wall, 0.30)
+        sofa_shadow = _mix(sofa, trim, 0.38)
+        table_edge = _mix(wood, metal, 0.24)
+        rug = _mix(floor, accent, 0.16)
+        leaf_dark = _shade(plant, 0.62)
+        leaf_light = _mix(plant, lamp, 0.18)
+
+        # The sofa is the largest foreground anchor in I02.  A stepped front
+        # seam, arm caps and small cushion patterns make its parts legible from
+        # the start and after a turn without changing the inherited proxy.
+        for index, x in enumerate((-2.78, -1.20)):
+            add_detail(
+                f"pixel-q05-r36-i02-sofa-front-seam-{index}", (0.045, 0.54, 1.18),
+                (x, 0.89, -1.34), sofa_shadow,
+                "upholstery_seam_detail", "photo_supported_furniture", MICRO_VOXEL,
+            )
+            add_xy(
+                f"pixel-q05-r36-i02-cushion-pixel-{index}",
+                (".aa.", "abca", "abca", ".aa."),
+                (x, 1.21, -1.28), (0.10, 0.10), 0.018,
+                {"a": sofa_shadow, "b": sofa_light, "c": _mix(sofa, accent, 0.16)},
+                "upholstery_pixel_detail", "photo_supported_cushion",
+            )
+        for index, x in enumerate((-3.70, 0.02)):
+            add_detail(
+                f"pixel-q05-r36-i02-sofa-arm-cap-{index}", (0.70, 0.08, 0.12),
+                (x, 1.22, -1.36), sofa_light,
+                "upholstery_edge_detail", "photo_supported_sofa_arm", FURNITURE_VOXEL,
+            )
+
+        # The round table receives a segmented top rim and visible pedestal
+        # facets.  These are deliberately render-only, so collision remains
+        # the tested inherited proxy.
+        for index, (x, z) in enumerate(((0.60, 0.55), (1.90, 0.55), (1.25, -0.10), (1.25, 1.20))):
+            add_detail(
+                f"pixel-q05-r36-i02-table-rim-segment-{index}", (0.48, 0.035, 0.06),
+                (x, 1.14, z), table_edge,
+                "round_table_edge_detail", "photo_supported_furniture", MICRO_VOXEL,
+            )
+        for index, x in enumerate((1.08, 1.25, 1.42)):
+            add_detail(
+                f"pixel-q05-r36-i02-table-base-facet-{index}", (0.11, 0.42, 0.18),
+                (x, 0.70, 0.55), _mix(metal, dark, 0.16 + index * 0.08),
+                "round_table_base_detail", "photo_supported_furniture", FURNITURE_VOXEL,
+            )
+
+        # A rug border and a few directional floor pixels connect the table to
+        # the room instead of leaving it on an unarticulated floor plane.
+        for index, (size, position) in enumerate(((2.90, (1.25, 0.17, 0.55)), (2.90, (1.25, 0.17, 0.55)))):
+            if index == 0:
+                add_detail(
+                    "pixel-q05-r36-i02-rug-front-border", (size, 0.025, 0.045),
+                    (position[0], position[1], position[2] - 1.34), _mix(rug, trim, 0.24),
+                    "rug_surface_detail", "photo_supported_rug", MICRO_VOXEL,
+                )
+            else:
+                add_detail(
+                    "pixel-q05-r36-i02-rug-side-border", (0.045, 0.025, 2.55),
+                    (position[0] - 1.44, position[1], position[2]), _mix(rug, trim, 0.24),
+                    "rug_surface_detail", "photo_supported_rug", MICRO_VOXEL,
+                )
+
+        # Vertical blind rhythm and a deeper plant silhouette reinforce the
+        # rear opening and foreground layering visible in the source living
+        # room, without using a flat photo card.
+        for index, x in enumerate((0.38, 0.72, 1.06, 1.40, 2.08, 2.42, 2.76, 3.10)):
+            add_detail(
+                f"pixel-q05-r36-i02-window-blind-{index}", (0.035, 2.05, 0.045),
+                (x, 2.38, -6.36), _mix(window, dark, 0.20 if index % 2 else 0.30),
+                "window_blind_detail", "photo_supported_window_covering", MICRO_VOXEL,
+            )
+        add_detail(
+            "pixel-q05-r36-i02-plant-stem", (0.07, 1.54, 0.07),
+            (-3.55, 1.84, 0.44), _mix(plant, dark, 0.32),
+            "vegetation_structure", "photo_supported_vegetation", MICRO_VOXEL,
+        )
+        for index, (x, y, z, colour) in enumerate((
+            (-3.94, 2.12, 0.44, leaf_dark), (-3.70, 2.34, 0.44, leaf_light),
+            (-3.40, 2.58, 0.44, plant), (-3.08, 2.82, 0.44, leaf_light),
+            (-3.56, 3.10, 0.44, leaf_dark),
+        )):
+            add_detail(
+                f"pixel-q05-r36-i02-plant-leaf-{index}", (0.42, 0.22, 0.20),
+                (x, y, z), colour, "vegetation_surface_detail", "photo_supported_vegetation", FURNITURE_VOXEL,
+            )
+
+        layout_version = PIXEL_V36_LAYOUT_VERSIONS["living_room"]
+        detail_pass = "v36-i02-indoor-surface-separation-pass-30"
+        generated_regions = [
+            "sofa_seam_and_cushion_layers", "round_table_rim_and_base_facets",
+            "rug_border_scale_cue", "window_blind_rhythm", "plant_stem_leaf_layers",
+        ]
+        note = (
+            "像素风 V36 I02 客厅表面分离候选：继承 V31 的微栅格沙发、圆桌、电视和窗外层次，"
+            "增加沙发分缝/靠垫、圆桌边缘/底座分件、地毯边界、百叶节奏和植物茎叶；"
+            "新增件只参与视觉表达，不改变碰撞和路线。"
+        )
+        quality_status = "candidate_indoor_surface_separation"
+
+    route_name = "pixel_style_sample_v36"
+    layout["layout_version"] = layout_version
+    layout["route"] = route_name
+    layout["style_route"] = route_name
+    layout["layout_authoring"] = f"q05_{'i01' if profile == 'corridor' else 'i02'}_surface_separation_pass"
+    layout.setdefault("pixel_spec", {})["detail_pass"] = detail_pass
+    layout["pixel_spec"]["micro_surface_voxel"] = MICRO_VOXEL
+    layout["pixel_spec"]["surface_density_policy"] = "named_semantic_layers_over_inherited_collision_shell"
+    layout["generated_regions"] = list(layout.get("generated_regions", [])) + generated_regions
+    layout["movement"]["collision_boxes"] = collision["boxes"]
+    collision["layout_version"] = layout_version
+    manifest["version"] = "pixel-v36"
+    manifest["provider_version"] = "pixel-voxel-v36"
+    manifest["generation_source"] = route_name
+    manifest["style_route"] = route_name
+    manifest["layout_version"] = layout_version
+    manifest["generated_region_note"] = note
+    manifest["quality_metrics"]["detail_pass"] = detail_pass
+    manifest["quality_metrics"]["semantic_detail_status"] = quality_status
+    manifest["pixel_spec"]["detail_pass"] = detail_pass
+    manifest["pixel_spec"]["micro_surface_voxel"] = MICRO_VOXEL
+    manifest["pixel_spec"]["surface_density_policy"] = "named_semantic_layers_over_inherited_collision_shell"
+    manifest["generated_regions"] = list(manifest.get("generated_regions", [])) + generated_regions
+    manifest["movement"]["collision_boxes"] = collision["boxes"]
+    manifest["detail_object_ids"] = list(manifest.get("detail_object_ids", [])) + details
+    scene.export(scene_path, file_type="glb")
+    layout_path.write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
+    collision_path.write_text(json.dumps(collision, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "README.txt").write_text(
+        f"Luna 像素风样板 V36 · {'I01 走廊' if profile == 'corridor' else 'I02 客厅'}表面分离候选\n\n"
+        "继承上一轮最佳候选的空间、光影、碰撞和路线；仅增加有来源的微细分件和表面节奏。\n"
+        "质量状态仍为 unverified，需与上一轮候选并排视觉检查。\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def build_pixel_corridor_v36(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r36-i01") -> dict[str, object]:
+    return _build_indoor_precision_v36(image_path, output_dir, scene_id, build_pixel_corridor_v33, "corridor")
+
+
+def build_pixel_living_v36(image_path: Path, output_dir: Path, scene_id: str = "pixel-q05-r36-i02") -> dict[str, object]:
+    return _build_indoor_precision_v36(image_path, output_dir, scene_id, build_pixel_living_v31, "living_room")

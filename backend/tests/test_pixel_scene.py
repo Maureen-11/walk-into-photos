@@ -20,6 +20,9 @@ from app.services.pixel_scene import (
     PIXEL_V06_LAYOUT_VERSION,
     build_pixel_corridor_v06,
     build_pixel_living_v06,
+    PIXEL_V36_LAYOUT_VERSIONS,
+    build_pixel_corridor_v36,
+    build_pixel_living_v36,
 )
 
 
@@ -203,3 +206,26 @@ def test_pixel_q02_i01_uses_photo_specific_window_side_layout(tmp_path: Path):
     assert "pixel-v02-corridor-left-window-0" in ids
     assert "pixel-v02-corridor-left-door-0" not in ids
     assert "pixel-q02-i01-window-light-0-0" in ids
+
+
+def test_pixel_v36_indoor_surface_pass_keeps_collision_contract(tmp_path: Path):
+    source = tmp_path / "indoor.png"
+    Image.new("RGB", (48, 32), (205, 210, 212)).save(source)
+
+    corridor_dir = tmp_path / "corridor-v36"
+    living_dir = tmp_path / "living-v36"
+    corridor = build_pixel_corridor_v36(source, corridor_dir, "pixel-v36-i01-test")
+    living = build_pixel_living_v36(source, living_dir, "pixel-v36-i02-test")
+    corridor_layout = json.loads((corridor_dir / "layout.json").read_text(encoding="utf-8"))
+    living_layout = json.loads((living_dir / "layout.json").read_text(encoding="utf-8"))
+
+    assert corridor["style_route"] == "pixel_style_sample_v36"
+    assert living["style_route"] == "pixel_style_sample_v36"
+    assert corridor["layout_version"] == PIXEL_V36_LAYOUT_VERSIONS["corridor"]
+    assert living["layout_version"] == PIXEL_V36_LAYOUT_VERSIONS["living_room"]
+    assert len(corridor["movement"]["collision_boxes"]) == 6
+    assert len(living["movement"]["collision_boxes"]) == 8
+    assert len(corridor_layout["objects"]) > 2200
+    assert len(living_layout["objects"]) > 2200
+    assert any(item["role"] == "window_reflection_pixel" for item in corridor_layout["objects"])
+    assert any(item["role"] == "upholstery_seam_detail" for item in living_layout["objects"])
