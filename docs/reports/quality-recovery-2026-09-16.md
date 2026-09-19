@@ -1,0 +1,52 @@
+# Luna 质量恢复执行记录（2026-09-16）
+
+## 当前实现
+
+本轮把真实非 mock 生成从固定粗模优先改为照片支持质量路线：
+
+`分析 → MoGe 深度与相机 → 照片表面保留 → 类别结构补全 → 共享碰撞布局 → 机器检查`
+
+MoGe 生成的相机空间照片投色表面不再被固定房间替换。室内、自然、街道和建筑分别添加有限的地面、边界、远景或体块；程序化结构与碰撞盒由同一布局描述生成。MoGe 失败时才进入 `procedural_coarse`，并在 manifest 的 `fallback_reason` 中保留失败类型。
+
+新请求默认 `quality_route=true`，仍兼容旧的 quick/full 任务记录。可选 `region_confirmations` 会参与布局证据与辅助标注哈希。manifest 新增质量路线、人工辅助、照片支持区域、生成区域和模型来源字段。
+
+前端提供可选区域确认：选择地面、墙面／边界或主要障碍后在照片上点击一次；确认框随任务请求传入并写入 `layout.json` 与 manifest 哈希。默认不点击仍保持全自动。
+
+本阶段追加查看器相机适配：在线与离线入口均根据实际画布比例，从 manifest 的 `fov_x/fov_y` 推导当前视场角，避免宽屏将照片表面压缩到画面中央；不改变 MoGe 几何、照片比例或质量状态判断。
+
+## 已验证
+
+命令记录（均退出码 0，工作树 `D:/CodexProjects/walk-into-photos-luna`）：
+
+- `backend`: `..\\.venv\\Scripts\\python.exe -m pytest -q -p no:cacheprovider`
+- `backend`: `..\\.venv\\Scripts\\python.exe -m compileall -q app tests scripts`
+- `backend`: `..\\.venv\\Scripts\\python.exe -m pip check`
+- `frontend`: `pnpm run build`
+- 模型环境：`.venv-models\\Scripts\\python.exe scripts/run_quality_batch.py --photos F:/walk in photo/pictures --output D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/batch`
+- 离线包：`backend/scripts/verify_export.py --package .../offline-i01/scene.zip --json .../verify-export.json`
+
+- 后端：57 项测试通过；Python 语法解析通过；pip check 通过。
+- 前端：TypeScript 与 Vite build 通过。
+- 本地 MoGe：使用 `moge-2-vits-normal/model.pt`，I01 真实质量路线生成成功。
+- 本地 API：Moondream 分类为 `indoor_space`，进入 `indoor_walk`；质量路线耗时约 12 秒（本机实测，不作为质量保证时限）。
+- 十图批处理：10/10 进入 `photo_supported_quality`，分类为室内 5、建筑 2、自然 1、街道 1、动物 1；本轮没有质量路线失败或静默粗模兜底。
+- 四类 API 代表样片：室内、自然、街道、建筑均为 `QUICK_READY`，provider 均为本地 MoGe＋photo-structure；机器状态统一为 `needs_visual_review`，不是质量通过。
+- 浏览器：I01 无控制台错误；初始照片表面可辨认；W 移动位置改变；转向后 W 仍按当前视线移动；R 回到 `[0,0,0]`。
+- 初步视检：起点照片表面已恢复；侧后视角由生成结构填充，但仍需继续改善纹理连续性与家具/墙面细节，当前状态为待视觉复核，不写作质量通过。
+- 相机适配回归：前端 TypeScript/Vite 构建通过；离线查看器源码随同入口更新。由于浏览器插件运行时路径缺失，本次未新增插件截图，视觉质量仍保持 `needs_visual_review`。
+- 材质取色回归：生成结构不再使用单一整图平均色，改为读取照片上／下／左右／中心色带；新增回归用例后后端测试为 57 项全部通过。
+- 生成状态回归：质量路线按实际完成节点更新“深度与相机”“照片表面与类别结构”“机器结构检查”，不添加人为等待；新增回调测试通过。
+- 第二轮十图批处理：`D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json`，10/10 为 `photo_supported_quality`，无 MoGe 失败或静默粗模兜底；MoGe＋结构阶段实测约 3.8–6.3 秒／图，耗时来自实际推理与导出，不人为等待。
+- API 阶段现场复验：任务 `424d07630e9944d49b0ee94ceef8b3c6` 使用 `.venv-models` 与本地权重，I01 识别为 `indoor_space`，最终来源为 `photo_supported_quality`，无 fallback；轮询实际观察到 8% → 38% → 70% → 92% → 100%，质量状态为 `needs_visual_review`。
+- 人工辅助现场复验：任务 `877e43714b4447a4b80067df092000d8` 使用 I01 的地面与障碍区域确认，最终来源为 `photo_supported_quality`，`manual_assisted=true`，manifest 记录辅助哈希 `a602782d32d748939c0a856da26c12da074b07ea7bdd6712b69292c9ac610ca2`，布局记录 2 个区域；质量状态仍为 `needs_visual_review`。
+- 室内双样片候选：I01 任务 `f1fc29a7492849e4943b2badb9d28759`／场景 `3ead70d3219441c6a7faaeeffed7be49`，I02 任务 `bbd64a077bb64e04b03266942624091e`／场景 `f29059b36ab441dab7c3c906c0806301`；两者均识别为 `indoor_space`、进入 `indoor_walk`、来源为 `photo_supported_quality`、各含 4 个碰撞盒，质量状态均为 `needs_visual_review`。
+
+## 保留的失败与限制
+
+- 质量路线浏览器插件连接因运行时引用不存在的浏览器服务路径而失败；本轮使用本地 Chrome 测试驱动完成同等页面检查，插件问题另行登记。
+- 曾用仅含基础依赖的 `.venv` 启动真实 API，I01 因 `torch` 缺失进入 `quality_route_failed:ModuleNotFoundError` 粗模兜底；该任务未删除，作为环境配置失败证据保留。当前服务已切换到含 `torch`／`moge` 的 `.venv-models`。
+- 历史最佳 GLB、录像不在 F 盘交接包中，当前使用固定交接提交和本地权重重新生成，不能声称复现旧机器最佳产物。
+- 单张照片不可见区域仍是估计补全；没有第二机证据时，跨机状态保持未验证。
+- 当前后端真实服务必须使用 `.venv-models`；基础 `.venv` 只用于轻量测试与 mock 演示，不能承载 Moondream/MoGe 质量路线。
+
+API 四类登记：[api-four.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/api-four.json)；第一轮十图批处理：[quality-batch.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/batch/quality-batch.json)；材质取色后的第二轮批处理：[quality-batch.json](D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json)。

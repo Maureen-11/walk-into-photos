@@ -1,60 +1,42 @@
-# AI 协作说明
+# Project instructions
 
-你是这个仓库的讨论协作者。目标是帮助两位学生把“走进照片”想法变成一个可在比赛中演示、能被普通人理解的最小原型。
+## Scope
 
-## 先读什么
+This repository is the student prototype for “走进照片”. The current target is the Luna execution plan: eight photo categories, four shared scene engines, local-first planning, a user-confirmed template, progressive quality modes, and an offline-shareable scene package. Any feature not in the current plan remains deferred.
 
-先读：
+## Working rules
 
-1. `README.md`
-2. `docs/project-outline.md`
-3. `docs/decisions.md`
-4. `docs/collaboration.md`
+- Preserve user changes; inspect `git status` before editing.
+- Do not add deferred features (phone, hand gestures, audio, multi-photo exhibitions, movie scenes) to this release.
+- Do not claim real 3D reconstruction. Clearly label AI-estimated or procedurally completed unseen areas.
+- Do not call online chat APIs or upload user photos. The planner must use the pinned local Moondream model or a clearly labelled local-rules fallback.
+- Keep generated artifacts and private photos out of Git.
+- Prefer small, reviewable commits and meaningful verification.
 
-## 重要边界
+## Validation language
 
-- 本仓库当前阶段是讨论和规划，不要擅自开始写产品代码。
-- 不要把“设想”“建议”“参考项目”写成已实现能力。
-- 不要虚构用户数量、测试结果、商业收入、比赛要求或模型效果。
-- 如果无法确认某个技术、链接、成本或比赛规则，明确标注“待核验”。
-- 不要要求任何人提供密码、验证码、API key 或私人照片。
-- 讨论上传照片时，要提醒授权、隐私、存储和删除机制。
-- “真实 3D 重建”“AI 补全不可见区域”“带景深的视觉模拟”是不同能力，不能混为一谈。
+Distinguish `mock/demo`, local-rules fallback, and real model-backed behavior in code, UI, and documentation.
+- Every Luna task must state its allowed modules, forbidden modules, input/output, validation command, visual checks, rollback, and evidence.
 
-## 你应该做什么
+## Offline (file://) delivery verification
 
-当成员邀请你评审时：
+`verify_export.py` 仅做包完整性检查，它的 `needs_offline_run` **不代表产物可用**。离线可运行性必须在真实浏览器里以 `file://` 打开来判定：
 
-1. 先复述你理解的用户、场景、输入、输出和验收标准；
-2. 指出你不确定的地方，并提出少量关键问题；
-3. 给出一个适合学生、能在有限时间完成的推荐方案；
-4. 把任务拆成可验证的小步骤；
-5. 对每个技术建议标注：已验证、待验证或仅为候选；
-6. 如果提出改动，优先新增一份反馈文档，而不是直接覆盖共同文档。
+- 工具：`D:\CodexProjects\offline-verify\run-verify.cmd`；用法与判定标准见 `D:\CodexProjects\offline-verify\CODEX-OFFLINE-VERIFY.md`。
+- 每生成一个 `*-offline.zip`，必须跑一次验证并把结果写进 manifest：
 
-## 反馈文件格式
+  ```bat
+  python backend/scripts/verify_offline_delivery.py --catalog <run>\catalog.json --strict
+  ```
 
-反馈建议写入：
+  或让校验与验证一步完成：
 
-`docs/feedback/YYYY-MM-DD-你的名字.md`
+  ```bat
+  python backend/scripts/validate_pixel_delivery.py --output <run>\catalog.json --scene b01=<scene_dir> --archive b01=<zip> --verify
+  ```
 
-建议包含：
-
-- 我理解的目标
-- 我最赞成的点
-- 我担心的点
-- 我建议保留的最小范围
-- 我建议暂缓的功能
-- 我愿意承担的工作
-- 需要团队确认的问题
-
-## 评审标准
-
-每条建议都尽量回答：
-
-- 普通观众能否在 30 秒内理解？
-- 队伍能否在 10 天内做出可演示版本？
-- 是否有清晰输入、过程和输出？
-- 出错时是否能解释或降级？
-- 是否能展示 AI 的实际作用，而不是只展示一个聊天框？
-- 是否会泄露照片或其他私人信息？
+- 终态只看 `catalog.json` 的 `records[].offline_verification.status`（`pass`/`fail`/`skipped`）与顶层 `all_offline_verification`。
+  `quality_status` 仍表示场景质量，**不**表示离线可运行性。
+- 禁止用 Codex 浏览器插件/浏览器工具打开 `file://`：插件导航 URL 策略硬编码只允许 `about:blank`/`http:`/`https:`，必被拒（`navigation_url_policy_blocked`，`retryable:false`）；Chrome 扩展的「允许访问文件网址」不影响该策略。
+- 验证失败时按 offline-verify 文档的处置手册修改产物（内联资源、去掉 `Worker`/`serviceWorker`/`WebAssembly.instantiateStreaming`、必要时换掉 `ImageBitmapLoader` 路径）；**不允许**通过 `--allow-file-access-from-files` / `--disable-web-security` 等放宽浏览器安全参数让验证通过。
+- 报告与截图留在 `<run>\offline-verify\<scene_id>\`，作为交付证据一并引用。

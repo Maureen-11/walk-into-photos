@@ -1,0 +1,10 @@
+# Optional, only needed for real MoGe inference. Keep separate from the API
+# dependencies so the demo mode stays fast to install.
+torch>=2.5
+torchvision>=0.20
+transformers==4.56.1
+accelerate==1.10.1
+einops>=0.8
+pyvips>=3.0
+opencv-python>=4.10
+moge @ git+https://github.com/microsoft/MoGe.git@925b8ed

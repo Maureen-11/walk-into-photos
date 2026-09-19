@@ -1,30 +1,32 @@
-# 本地环境
 .env
 .env.*
 !.env.example
-
-# Python
+!backend/.env.demo.example
+!backend/.env.real.example
 __pycache__/
 *.py[cod]
 .venv/
+.venv-models/
 venv/
-
-# Node
 node_modules/
-.next/
 dist/
-
-# 模型和大型生成文件
-*.ckpt
-*.safetensors
-*.pth
-*.onnx
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+data/uploads/
+data/intermediates/
+data/scenes/
+data/moge-test/
+model-cache/
 *.glb
 *.ply
-*.mp4
-*.mov
-
-# 本地测试素材（不要误传私人照片）
-local-assets/
-private-assets/
-outputs/
+*.pt
+*.safetensors
+test-images/
+third_party/
+data/
+.pytest_cache/
+tmp-*/
+*.zip
+*.sqlite3
+*.db

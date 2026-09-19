@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>走进照片 · 交接资料</title>
+  <style>
+    :root { color-scheme: light; --ink:#20243a; --muted:#68708a; --line:#dce1ee; --accent:#4557b8; --paper:#fff; --back:#f2f4fa; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--back); color:var(--ink); font:16px/1.75 "Microsoft YaHei", "PingFang SC", sans-serif; }
+    aside { position:fixed; inset:0 auto 0 0; width:270px; padding:28px 22px; background:#1f2442; color:#fff; overflow:auto; }
+    aside h1 { margin:0 0 8px; font-size:24px; }
+    aside p { color:#bec6ec; font-size:13px; }
+    nav { display:grid; gap:8px; margin-top:24px; }
+    nav a { color:#eef1ff; text-decoration:none; padding:10px 12px; border-radius:8px; background:#ffffff0d; }
+    nav a:hover { background:#ffffff20; }
+    main { max-width:1100px; margin-left:270px; padding:32px 42px 80px; }
+    .notice { max-width:920px; margin:0 auto 24px; padding:16px 20px; border:1px solid #cbd4ff; border-radius:12px; background:#eef1ff; }
+    .document { max-width:920px; margin:0 auto 30px; padding:38px 46px; border:1px solid var(--line); border-radius:16px; background:var(--paper); box-shadow:0 10px 28px #28335b12; }
+    .section-label { color:var(--accent); font-weight:700; letter-spacing:.08em; }
+    h1,h2,h3 { line-height:1.35; scroll-margin-top:18px; }
+    h1 { margin-top:12px; font-size:32px; }
+    h2 { margin-top:34px; padding-bottom:8px; border-bottom:1px solid var(--line); font-size:23px; }
+    h3 { margin-top:26px; font-size:19px; }
+    a { color:#354bb5; }
+    table { width:100%; border-collapse:collapse; display:block; overflow-x:auto; }
+    th,td { border:1px solid var(--line); padding:9px 12px; text-align:left; vertical-align:top; min-width:120px; }
+    th { background:#f5f6fb; }
+    pre { overflow:auto; padding:16px; border-radius:10px; background:#171a2e; color:#eef1ff; line-height:1.55; }
+    code { font-family:Consolas, monospace; }
+    blockquote { margin:16px 0; padding:4px 18px; border-left:4px solid #8897e5; color:#46506d; background:#f8f9ff; }
+    @media (max-width:850px) { aside { position:static; width:auto; } main { margin:0; padding:20px 12px 50px; } .document { padding:24px 20px; } }
+    @media print { aside { display:none; } main { margin:0; padding:0; } .document { box-shadow:none; page-break-before:always; border:0; } .document:first-of-type { page-break-before:auto; } }
+  </style>
+</head>
+<body>
+  <aside><h1>走进照片</h1><p>离线交接阅读页。无需网络，点击目录在本页跳转。</p><nav><a href='#handoff'>交接入口</a>
+<a href='#project-brief'>项目大纲、进度与前瞻</a>
+<a href='#codex-handover'>给新电脑 Codex 的工程上下文</a>
+<a href='#prompt-playbook'>AI 协作与 Prompt 实例</a></nav></aside>
+  <main>
+    <div class="notice"><strong>使用方法：</strong>解压交接包后，双击本文件。GitHub 上仍以原始 Markdown 文档为准；本页是为了避免本地浏览器把相对路径误当成网站。</div>
+    <section id='handoff' class='document'><div class='section-label'>交接入口</div><h1 id="section">走进照片：交接入口</h1>
+<p>2026-09-16 · Luna 截止 9 月 19 日交付冲刺版，非比赛成品。本页优先于历史报告中的进度声明；历史报告不改写。</p>
+<p>本地浏览器阅读请直接双击根目录 <code>OPEN-HANDOFF.html</code>。下面的 Markdown 相对链接主要供 GitHub 和代码编辑器使用。</p>
+<h2 id="section-1">阅读顺序</h2>
+<ol>
+<li>人类接手者： <a href="#project-brief">项目说明</a>，理解目标和下一步。</li>
+<li>新电脑 Codex：AGENTS.md → <a href="#codex-handover">工程上下文</a>。</li>
+<li>初学者： <a href="#prompt-playbook">AI 协作实例</a>。</li>
+<li>需要追溯时才读 docs/reports 和旧计划；不必逐篇阅读。</li>
+</ol>
+<h2 id="luna">当前状态（Luna 计划）</h2>
+<p>工作树：<code>D:/CodexProjects/walk-into-photos-luna</code>  · 分支：<code>handoff/luna-20260915</code>  · 基准提交：<code>a78122b6f179d2b5e82ff02c9ecc7c767d637ae7</code>。</p>
+<p>工程可以运行，当前已接入照片支持质量路线；真实室内侧视仍需视觉复核。不要把生成结束、测试通过或候选 GLB 当作真实空间质量通过。最新回归为后端 <strong>57 passed</strong>、前端 <code>pnpm run build</code> 通过、<code>pip check</code> 通过；10 张素材已在本地模型环境逐张完成 Moondream 分类与 MoGe 质量路线生成。I01 已完成真实 API、浏览器和 file:// 离线路线验证，但视觉质量仍保守标为待复核。P14 安全切换基础层保留，旧记录继续可读。</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>当前事实状态</th>
+<th>证据或等待条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P00</td>
+<td>已验证</td>
+<td>112 文件清单、10 张素材哈希、独立工作树</td>
+</tr>
+<tr>
+<td>P01</td>
+<td>已验证</td>
+<td>Python 3.12.14、依赖、Playwright、缓存路径</td>
+</tr>
+<tr>
+<td>P02</td>
+<td>已验证（演示流程）</td>
+<td>新电脑 mock 上传→分析→任务→GLB→导出；真实模型另记 P08</td>
+</tr>
+<tr>
+<td>P03</td>
+<td>已修正</td>
+<td>本页与 <code>OPEN-HANDOFF.html</code> 为唯一当前入口；历史报告保留</td>
+</tr>
+<tr>
+<td>P04</td>
+<td>已验证</td>
+<td>生成状态与质量状态分离；旧记录默认未验证</td>
+</tr>
+<tr>
+<td>P05</td>
+<td>已验证（含冲刺粗模）</td>
+<td>查看器焦点、投影、异步切换、失焦、碰撞和路线测试</td>
+</tr>
+<tr>
+<td>P06</td>
+<td>已验证（本机）</td>
+<td>冲刺粗模 ZIP 断网 <code>file://</code> 双击加载、移动、重置；第二机仍未验证</td>
+</tr>
+<tr>
+<td>P07</td>
+<td>机制已验证</td>
+<td>缺合格真实动作视频，产品动作仍未验证</td>
+</tr>
+<tr>
+<td>P08</td>
+<td>环境已验证，质量待复核</td>
+<td>本轮已修正 MoGe 权重文件路径；MoGe＋API 可运行，质量仍 <code>needs_visual_review</code></td>
+</tr>
+<tr>
+<td>P09</td>
+<td>未通过质量门</td>
+<td>公平对照仍有空洞、拉伸和侧视不连续</td>
+</tr>
+<tr>
+<td>P10</td>
+<td>未通过</td>
+<td>r27 把 r26 候选接入查看器后，侧移／转视出现大块黑色空区和单色墙面；候选仍未接入主路由</td>
+</tr>
+<tr>
+<td>P11–P12</td>
+<td>旧精细路线等待；冲刺粗模碰撞已验证</td>
+<td>旧路线仍需 P10 合格结构；本次交付使用独立参数化碰撞，不冒充精确家具重建</td>
+</tr>
+<tr>
+<td>P13</td>
+<td>尚未进入</td>
+<td>按计划等待室内基础路线；不同时改多个引擎</td>
+</tr>
+<tr>
+<td>P14</td>
+<td>部分完成（安全层）</td>
+<td>已加入来源／相机／资源／验收证据合同、取消保留和 quick/full 安全阻断；完整版仍需明确质量通过与同路线视觉证据</td>
+</tr>
+<tr>
+<td>P15</td>
+<td>等待条件</td>
+<td>缺第二台断网电脑；不能用同一台新浏览器替代</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deadline-sprint">截止交付冲刺当前结果</h2>
+<p>本轮新增路线是“照片支持质量场景”：有效图片统一进入本地规划；质量请求默认恢复 MoGe 照片投色表面，再按类别补充有限实体结构与共享碰撞布局。模型失败时才登记 <code>procedural_coarse</code>，并保留 <code>fallback_reason</code>。通用展厅不再是默认质量路线。</p>
+<p>隔离真实模型证据：<a href="D:/CodexProjects/luna-evidence/run-20260916-planner-r1/">run-20260916-planner-r1</a> 已用本机 Moondream 对 10 图分类（5 室内、2 建筑、1 自然、1 街道、1 动物）；<a href="D:/CodexProjects/luna-evidence/run-20260916-real-route-r1/luna-real-route-report.md">run-20260916-real-route-r1 报告</a> 记录 I01、I02、ANIMAL 的 <code>moondream2-local</code> 分析、粗模生成、浏览器路线和导出。分类与 API 接入成功不等于真实空间几何通过，演示默认仍保留确定性的粗模兜底。</p>
+<p>已亲自检查的证据目录：<a href="D:/CodexProjects/luna-evidence/run-20260916-coarse-route-r3">run-20260916-coarse-route-r3</a>，汇总报告为 <a href="D:/CodexProjects/luna-evidence/run-20260916-coarse-route-r3/luna-coarse-route-report.md"><code>luna-coarse-route-report.md</code></a>。其中 <code>batch-ten.json</code> 是 10 图结果，<code>heading-route-check.json</code> 覆盖 0°／90°／180°／270°／45°，<code>browser-check.json</code> 覆盖转身后 W、碰墙和 R 重置，<code>offline-r8-check.json</code> 与 <code>offline-r8.png</code> 是本机断网包检查和截图，<code>coarse-scene-r4.zip</code> 是备用演示包。</p>
+<p>当前结论分开记录：工程运行 <strong>通过</strong>；照片支持质量生成、相机朝向移动、实体碰撞、重置和本机离线加载 <strong>已验证</strong>；真实照片空间还原和视觉质量 <strong>待复核</strong>，侧视仍有简化结构和纹理连续性限制；第二台电脑离线体验 <strong>等待条件</strong>。旧 P09/P10 的空洞、拉伸和不连续失败证据仍然有效，没有用本次候选覆盖它们。</p>
+<p>质量恢复本轮证据：<a href="D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r1/">quality-recovery-r1</a>；材质取色后的第二轮十图结果表为 <a href="D:/CodexProjects/luna-evidence/run-20260916-quality-recovery-r2/quality-batch.json"><code>quality-batch.json</code></a>，I01 浏览器和离线截图均在第一轮目录。质量场景 manifest 记录照片支持路线、MoGe 权重、布局版本、碰撞资源和生成区域；当前没有把待复核截图写成通过。</p>
+<p>最新室内查看器路线证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r27/P10-r27-report.md">P10 r27 报告</a>；语义法线独立实验：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r26/P10-r26-report.md">P10 r26 报告</a>；上一轮室内线段约束证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r25/P10-r25-report.md">P10 r25 报告</a>；本地语义检测诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r23/P10-r23-report.md">P10 r23 报告</a>；支撑像素与透视候选复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r22/P10-r22-report.md">P10 r22 报告</a>；前一轮透视候选诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r21/P10-r21-report.md">P10 r21 报告</a>；无语义排除对照：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r19/P10-r19-report.md">P10 r19 报告</a>；I01 线段约束证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r17/P10-r17-report.md">P10 r17 报告</a>；前一轮线段诊断：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r16/P10-r16-report.md">P10 r16 报告</a>；最近几何候选：<a href="D:/CodexProjects/luna-evidence/run-20260915-p10-r15/P10-r15-report.md">P10 r15 报告</a>。P08 Moondream 启动环境证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r2/P08-r2-report.md">P08-r2 报告</a>；P08 MoGe 启动环境证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r4/P08-r4-report.md">P08-r4 报告</a>；旧服务清理记录：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-r3-service-cleanup/P08-r3-service-cleanup-report.md">P08-r3 报告</a>；P14 安全层证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p14-r1/P14-r1-report.md">P14 r1 报告</a>。当前交接入口证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r19/P03-r19-report.md">P03-r19 报告</a>；上一轮入口复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r18/P03-r18-report.md">P03-r18 报告</a>；更早入口复核：<a href="D:/CodexProjects/luna-evidence/run-20260915-p03-r17/P03-r17-report.md">P03-r17 报告</a>。真实 API 流程证据：<a href="D:/CodexProjects/luna-evidence/run-20260915-p08-moondream-api/P08-moondream-api-report.md">P08 Moondream API 报告</a>。证据目录统一位于 <code>D:/CodexProjects/luna-evidence</code>，运行产物统一位于 <code>D:/CodexProjects/luna-runtime</code>；两处均使用新的运行编号，不覆盖旧数据。</p>
+<p>当前未合并 PR、未发布、未上传照片或模型、未删除旧数据。按本轮用户授权，代码已同步至 GitHub 独立分支 <code>handoff/luna-20260915</code>；F 盘原始交接包和照片仍只读使用。</p>
+<h2 id="section-2">新电脑演示启动</h2>
+<p>以当前工作树 <code>D:\CodexProjects\walk-into-photos-luna</code> 为例。先准备 Python 3.12、Node 与 pnpm。以下不安装真实模型；不要复制旧 .venv。精确的已验证版本和安装顺序见 <a href="docs/handoff/ENVIRONMENT_VERIFIED.md">环境记录</a>。</p>
+<pre><code class="language-powershell">cd D:\CodexProjects\walk-into-photos-luna
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+Copy-Item backend/.env.demo.example backend/.env
+cd backend
+$env:MOCK_MODE='true'
+$env:MOCK_GEOMETRY='true'
+$env:LOCAL_PLANNER_ENABLED='false'
+$env:COARSE_SCENE_ENABLED='true'
+$env:DATA_DIR='D:/CodexProjects/luna-runtime/demo'
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+</code></pre>
+<p>另一个终端：</p>
+<pre><code class="language-powershell">cd D:\CodexProjects\walk-into-photos-luna\frontend
+pnpm install --frozen-lockfile
+pnpm dev --host 127.0.0.1
+</code></pre>
+<p>打开 <a href="http://127.0.0.1:5173/">http://127.0.0.1:5173/</a>；API 健康检查 <a href="http://127.0.0.1:8000/api/health">http://127.0.0.1:8000/api/health</a>。使用获授权图片。演示配置仍走自动粗模；真实质量配置复制 <code>backend/.env.real.example</code>，恢复本地 MoGe 和 Moondream，质量路由失败才进入明确标注的粗模兜底。</p>
+<p>真实模式需另行复制 backend/.env.real.example 到不存在的 backend/.env，修改缓存路径和开关；已有 .env 勿覆盖。<code>.env.example</code> 保留作完整配置参考，不建议初学者直接使用。requirements-models.txt 已固定 MoGe 提交，但完整 GPU 环境仍需在目标电脑复核。模型与缓存放 D 盘。</p>
+<h2 id="section-3">资产与交付边界</h2>
+<p>当前新电脑事实修正：实测为 RTX 4060 Laptop、显存约 8188 MiB；MoGe 与 Moondream 已在隔离模型环境本地运行，并完成缓存后的离线读取复测。Moondream 已补充真实 API 验证；本轮十图均生成照片支持质量候选，I01 已完成浏览器与 file:// 路线，视觉质量仍待复核，第二机兼容性仍未完成验收。</p>
+<p>下方的 RTX 4050／口述配置是历史原记录，按交接规则保留，不作为当前机器事实。</p>
+<p>工程包排除 .env、照片/录像、模型、虚拟环境、数据库、GLB、第三方源码副本和 Git 历史。私人案例经所有者同意单独交接。原机器运行数据未删除。</p>
+<p>原机记录 RTX 4050 Laptop 约6GB；朋友口述 RTX4060 8GB，新电脑须复核。生成端需要模型；体验端加载结果，但浏览器性能仍需测试。远程 API 配置已预留，尚无已部署生成服务器。</p>
+<p>旧段落中的导出限制是历史记录。当前 P06 已验证本机断网 <code>file://</code> 双击导出包：入口自包含 manifest 与 GLB 数据，不依赖本地相对 <code>fetch</code> 或模块导入；第二台电脑仍未验证。ZIP 文件齐全不自动代表跨机通过。</p>
+<p>请先读三份专用文档并启动演示，再按 Codex 交接文档第一项任务推进。源码已同步到独立分支 <code>handoff/luna-20260915</code>；不要删旧历史。包内 PACKAGE_MANIFEST.json 记录文件哈希。当前未同步照片、模型权重或运行数据。</p>
+</section>
+<section id='project-brief' class='document'><div class='section-label'>项目大纲、进度与前瞻</div><h1 id="section">给接手者：我们想做什么、做到哪里、接着怎样做</h1>
+<h2 id="section-1">项目的起点</h2>
+<p>我们是开发经验有限的学生，希望用 AI 把普通照片变成可以体验的内容，而不是再做一个聊天工具。最初为了参加 AI＋超级智能体赛道展开探索；后来明确了“走进照片”的方向。赛事资格和截止时间在正式提交前需重新核对官网，不把旧对话中的日期当当前承诺。</p>
+<p>用户上传图片，AI 判断内容和适合的体验，解释建议，用户确认后生成。用户不必先写一长段愿望。产品价值在于帮助普通人从照片得到可体验、可分享的作品。</p>
+<h2 id="section-2">两条主线</h2>
+<p>场景类：从拍摄位置出发，在合理尺度的空间里前进、绕过障碍、回头看。雪山要有近景雪地到山谷的纵深；走廊要有人在室内的眼高和墙地约束。不能把二者套成同样大小的盒子。</p>
+<p>主体类：猫咪、人物、桌面物品更适合回应。用户希望摸摸猫头，猫产生短回应，而背景保持稳定。我们后来决定主体不必强求环绕，以预生成短动作、点击或鼠标触发为优先路线。摄像头手势是未来入口，不是当前必须交付。</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>期望体验</th>
+<th>当前真实状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>自然</td>
+<td>进入近景、山谷，切换飞行</td>
+<td>网格可生成，连续性/尺度失败</td>
+</tr>
+<tr>
+<td>室内</td>
+<td>有地面和墙的有限探索</td>
+<td>结构和碰撞未通过</td>
+</tr>
+<tr>
+<td>街道</td>
+<td>从俯拍点下降，主体不撕裂</td>
+<td>未分离人车树</td>
+</tr>
+<tr>
+<td>建筑</td>
+<td>沿立面上下观察</td>
+<td>线条和侧面仍待重建</td>
+</tr>
+<tr>
+<td>动物</td>
+<td>摸头等局部回应</td>
+<td>无合格动作素材</td>
+</tr>
+<tr>
+<td>人物</td>
+<td>特征稳定的短回应</td>
+<td>未通过</td>
+</tr>
+<tr>
+<td>食物</td>
+<td>语义合理的细节互动/观察</td>
+<td>未通过</td>
+</tr>
+<tr>
+<td>艺术/旧照片</td>
+<td>按画面选分层或主体路线</td>
+<td>未通过</td>
+</tr>
+</tbody>
+</table>
+<p>正常照片允许上传和尝试；失败应说明原因，不能为了显示成功交付破碎画面。原图没有的信息允许简化创作，需明确标识。不是摄影测量级的真实空间复原。</p>
+<h2 id="section-3">我们做成了什么</h2>
+<p>上传和预览、AI 规划协议、本地模型适配、任务状态持久化、基础网格生成、浏览器加载与键鼠控制已有代码。项目有真实 MoGe 运行记录，也有演示模式。已添加案例和检查工具。它们提供继续研发的底座，但未解决最重要的视觉体验。</p>
+<p>截图反馈已经暴露：侧移后出现拉伸和大片空洞；飞行能看到网格下方；街道人物变形；室内线条弯曲。多轮过滤和壳层尝试没有达到目标。不能向接手者宣称只剩美化 UI。</p>
+<h2 id="section-4">总体任务与下一步</h2>
+<p>HANDOFF 中列出 T00—T10 全部状态。近期优先顺序：</p>
+<ol>
+<li>在新电脑跑通演示与测试，确认源码、环境和页面是一致版本。</li>
+<li>用少量获授权真实样片复现问题，固定起点、前进、侧移、回头、飞行的拍摄路线。</li>
+<li>负责模型的同伴在独立环境比较候选，拿出可加载产物、资源耗时、失败证据。</li>
+<li>选一条确实改善效果的路线接入。先验一个清晰样片，再验不同照片，禁止按图片写死答案。</li>
+<li>同时推进不依赖大模型的交互、导出与状态正确性；检查工具要接入实际流程才产生产品效果。</li>
+<li>扩展剩余类别，再做真实完整版、渐进切换、跨机体验与提交材料。</li>
+</ol>
+<p>快速/完整/渐进是体验目标。旧“3—5分钟、10分钟以上”不是等待要求，不许人为延迟凑时间；full 必须有实际改善。当前仅更多顶点不够。</p>
+<h2 id="section-5">分工建议</h2>
+<p>由一人统筹接口与合并，另一人负责模型实验，其余人分别做查看器/交互和样片验收。实际人数减少时按模块承担，不机械分成四个人。实验先放独立分支，提供器有结果后再合并。朋友有8GB显卡的说法待核验；不得将8GB推断为任何候选都能运行。</p>
+<p>生成端和体验端可以分开：一台电脑或获批准的服务器生成，其他电脑加载资源。当前仅预留远程地址配置，服务器未部署。付费、照片上传及公开服务要单独确认。</p>
+<h2 id="section-6">前瞻与暂缓</h2>
+<p>未来可加入电脑摄像头手势（摸头、指向、移动）、手机体验、声音、热点说明、多照片展览。它们依赖当前基本体验可靠，不应在几何失败时优先堆功能。UI 后期会重做，因此接下来应逐步把生成和交互逻辑从布局中分离。</p>
+<p>成功的判断是普通体验者确实能感到进入场景或得到主体回应，结果可解释、可交付。代码数量、模型名称和测试数量只是辅助证据。</p>
+</section>
+<section id='codex-handover' class='document'><div class='section-label'>给新电脑 Codex 的工程上下文</div><h1 id="codex">给新电脑 Codex 的交接上下文</h1>
+<p>先读 HANDOFF.md 与 AGENTS.md。本项目为初学者开发的“走进照片”实验原型，不能沿用历史报告中的功能完成声明。</p>
+<h2 id="section">目标与已确认约束</h2>
+<p>场景从原拍摄点进入有限连续空间，能前进、绕行、回头，自然景支持飞行。主体类采用预生成短动作、点击/鼠标触发，保持特征和背景。八类目标见 PROJECT_BRIEF_ZH.md。允许创作不可见区域并标识；不能声称真实复原。</p>
+<p>所有安装与缓存优先 D 盘。照片本地处理；用户接受讨论朋友/远程生成架构，但未授权付费部署或上传照片。手机、摄像头、音乐和展览暂缓。用户偏好 Astra 写计划、Luna 实施，同一验收标准；不得声称实际切换了未切换的模型。</p>
+<h2 id="section-1">代码地图</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>backend/app/main.py</td>
+<td>API、队列、生成、manifest、导出 HTML</td>
+</tr>
+<tr>
+<td>backend/app/config.py</td>
+<td>backend/.env、路径与开关</td>
+</tr>
+<tr>
+<td>backend/app/models.py、store.py</td>
+<td>类型、SQLite 持久化</td>
+</tr>
+<tr>
+<td>services/photo_plan.py</td>
+<td>Moondream 分类和区域候选、规则兜底</td>
+</tr>
+<tr>
+<td>services/geometry.py</td>
+<td>MoGe 深度网格、相机缩放、面过滤</td>
+</tr>
+<tr>
+<td>services/templates.py</td>
+<td>模板和移动配置；标签不是已实现引擎</td>
+</tr>
+<tr>
+<td>services/context_shell.py</td>
+<td>实验壳层，未解决几何缺陷</td>
+</tr>
+<tr>
+<td>services/scene_quality.py</td>
+<td>结构检查，非视觉通过</td>
+</tr>
+<tr>
+<td>frontend/src/App.tsx</td>
+<td>上传、场景和主体查看器，仍集中在大文件</td>
+</tr>
+<tr>
+<td>backend/scripts/bakeoff</td>
+<td>独立算法实验</td>
+</tr>
+<tr>
+<td>backend/scripts/benchmark_*.py</td>
+<td>大多仅做线索/协议检查</td>
+</tr>
+<tr>
+<td>compare_scene_versions.py</td>
+<td>独立比较，未接入在线切换门禁</td>
+</tr>
+<tr>
+<td>verify_export.py</td>
+<td>ZIP 完整性，不证明双击可用</td>
+</tr>
+</tbody>
+</table>
+<h2 id="section-2">必须知道的问题</h2>
+<ol>
+<li>单视角网格在侧移后出现薄片、洞和严重拉伸。雪山不能仅靠收紧边界或壳层修好。</li>
+<li>full 主要增加分辨率，尚无合格新增结构/补全；同步相机和资源仍需检查。</li>
+<li>AABB 与地形射线不是完整碰撞。出生点、坡面、飞行仍未通过。</li>
+<li>主体视频入口尚无合格素材；cooldown 计时器可能提前清除播放。整只猫检测框不能当猫头框。按钮响应不等于真实目标区域交互。</li>
+<li>离线 HTML 使用 fetch 和本地 ES module；需要解决 file:// 加载或提供明确可运行方案。</li>
+<li>新增检查脚本存在局限：动作报告写 no-op 并未实测 UI；版本比较未严格证明同一输入，缺失指标也需保守处理。不要把这些脚本当正式验收门。</li>
+</ol>
+<h2 id="section-3">已试过的路线</h2>
+<p>MoGe 平滑/长边过滤只缓解少数面片。深度断连、三层切片对雪山没有明确改善。程序化壳层可能显示廉价灰面。3D Photo Inpainting 有源码预检，但旧环境依赖缺失，未产生合格结果。TripoSR 预检存在 rembg 等依赖和资源问题，未验证8GB成功。详情按需读 algorithm-bakeoff 报告。</p>
+<h2 id="section-4">第一项任务：可直接执行</h2>
+<p>目标：建立新电脑演示基线、确认真实模型缺件。</p>
+<ul>
+<li>允许：独立 D 盘环境/数据、配置示例、交接测试记录。</li>
+<li>禁止：覆盖已有 .env、批量重构、混装模型、上传照片。</li>
+<li>输入：源码包；输出：环境版本、健康检查、上传→任务→manifest 记录。</li>
+<li>命令：按 HANDOFF 启动；测试依赖 <code>pip install -r backend/requirements-dev.txt</code>；backend 下 <code>..\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider</code>；frontend 下 <code>pnpm run build</code>。</li>
+<li>视觉：页面与演示状态一致，不把平面当三维完成。</li>
+<li>回退：停止本次服务，保留原环境与数据。</li>
+<li>证据：命令退出码、截图、实际失败项。完成后继续独立任务，不为小步骤重复问是否继续。</li>
+</ul>
+<h2 id="section-5">后续顺序</h2>
+<p>先修可独立验证的导出和动作触发，再接入朋友给出的合格几何/动作产物。选择一条场景路线，使用清晰图和困难图验证后扩展八类；最后做真实 full、新旧版本安全切换、第二电脑离线与性能验证。</p>
+<p>朋友需提供实测 GPU/驱动、源码 commit、模型 revision、许可、输入/产物、耗时显存与失败记录。生成电脑和体验电脑可分工，不代表结果在任意电脑必然流畅。</p>
+<h2 id="section-6">资料优先级</h2>
+<p>HANDOFF 和本文件是接手入口；luna-continuous-rebuild-plan 是验收目标；旧 reports 是历史，不是功能清单。所有“通过”必须限定范围。源码包不含私人样片，缺图先列缺件，不能编造视觉通过。</p>
+</section>
+<section id='prompt-playbook' class='document'><div class='section-label'>AI 协作与 Prompt 实例</div><h1 id="ai">初学者如何与 AI 合作：本项目的真实交流实例</h1>
+<p>以下“原话”摘自项目发起人在本次对话中的消息，仅选工作表达，不是完整聊天记录。“解释”和“可复制模板”由 AI 整理，不冒充用户原话。无需模仿情绪或术语，学习的是把目标、证据和边界表达清楚。</p>
+<h2 id="section">1. 让更强模型规划，让执行模型完成小任务</h2>
+<p>原话：</p>
+<blockquote>
+<p>计划是luna版实现，所以你要专门为luna来设计计划，但是任务质量不能下降</p>
+</blockquote>
+<p>解释：任务拆小、接口明确、失败时能回退；降低执行成本不等于放宽视觉验收。用户常用 Astra 讨论计划、Luna 实施；模型选项以自己的应用为准，发一条 prompt 并不会保证实际切换模型。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">请先为执行模型写计划。每项包含目标、允许修改范围、输入输出、验证步骤、视觉标准和失败处理。
+按依赖拆成小任务，质量标准不降低。执行模型完成后给出文件、测试和截图证据；没通过就写未通过。
+</code></pre>
+<h2 id="ai-1">2. 先讨论，不让 AI 把讨论当开工</h2>
+<p>原话：</p>
+<blockquote>
+<p>我让你先和我讨论生成计划书，不是让你开始动工修改工程哦</p>
+</blockquote>
+<p>解释：AI 可能把“怎么样”理解为实施请求。明确当前阶段，能避免未经讨论的架构修改。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">这一轮只讨论和读代码，不修改工程。请先指出当前方案的问题、可选路线和需要我决定的地方。
+我们确认后，你再生成可执行计划。
+</code></pre>
+<h2 id="section-1">3. 把抽象愿景变成可以验收的动作</h2>
+<p>原话：</p>
+<blockquote>
+<p>把“能走进去、绕过去、回头看”做扎实</p>
+</blockquote>
+<p>原话：</p>
+<blockquote>
+<p>我想让用户从原照片的拍摄位置出发，沿着近处雪地真正向山谷和远山前进</p>
+</blockquote>
+<p>解释：比“更沉浸”“更高级”具体，能设计操作录像。但雪山只是例子，不应让实现只支持这一张图。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">用户从照片拍摄点开始，向前走、侧移、回头，不能出现大片洞和明显拉伸。
+请用两张不同照片验证同一体验，并分别说明可见区域和创作区域。
+</code></pre>
+<h2 id="ai-2">4. 主动要求 AI 提意见，而不只是同意</h2>
+<p>原话：</p>
+<blockquote>
+<p>你觉得我们还忽视了什么问题，现在已经足够为luna编写计划了吗</p>
+</blockquote>
+<p>原话：</p>
+<blockquote>
+<p>现在由你来规划，跟我确认该怎么做有什么想法和点子，有建议一定要说，不知道不了解的就问，多沟通多交流</p>
+</blockquote>
+<p>解释：让 AI 找缺少的依赖、文件、算力与验收条件。“90%把握”不能成为随口报出的数字，应落实为已确认事项。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">不要默认同意我的方案。请指出最影响成败的三个遗漏、已经有证据的部分和仍需实测的假设。
+能自主查明的先查；只有产品取舍需要我决定时再问。
+</code></pre>
+<h2 id="section-2">5. 用实际失败纠正“完成”的定义</h2>
+<p>原话：</p>
+<blockquote>
+<p>怎么还是这样，完全没变化啊</p>
+</blockquote>
+<p>原话：</p>
+<blockquote>
+<p>其次我记得你说过简洁版需要3-5分钟构建，完整版要10分钟以上，为什么我构建完整版几十秒就好了，你是不是偷工减料了</p>
+</blockquote>
+<p>解释：用户指出预期和实际不符。这里应追问新增了哪些步骤，不能把等待十分钟本身当质量，也不必预设短耗时一定偷工减料。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">当前结果与上版看不出改善。请先核对页面加载的任务ID、产物版本和本次实际执行步骤。
+用相同路线比较前后结果，解释差异。不要人为延迟，也不要只用“测试通过”回答画面质量。
+</code></pre>
+<h2 id="section-3">6. 提供反馈的可复现信息</h2>
+<p>原话：</p>
+<blockquote>
+<p>为什么我按了F飞行后按空格，整个页面会往下走，而不是飞起来，也可以飞起来，但页面也同时会往下</p>
+</blockquote>
+<p>解释：这条反馈同时说明操作、期望和异常，比“坏了”更容易定位浏览器默认滚动和场景按键冲突。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">操作：点击场景，按F，再按住空格。
+预期：相机上升，网页位置不变。
+实际：相机和网页都移动。附截图/录像，并说明是否刷新、是否重新生成。
+请先复现原因，修复后重复相同步骤验证。
+</code></pre>
+<h2 id="section-4">7. 查已有项目，再决定自研</h2>
+<p>原话：</p>
+<blockquote>
+<p>你现在在各种网站搜，尤其是GitHub上，看没有类似的同类算法，能做到更好，如果可以直接借鉴，告诉我怎么做，然后还是写小计划书让luna完成，如果没有了实在不行再重做引擎</p>
+</blockquote>
+<p>解释：先看官方源码、许可、硬件与实际产物，不把 README 视频当自己已跑通。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">找最多三条相关开源路线。分别核对许可证、Windows支持、显存和输入输出。
+先独立跑一个样片，再决定是否接入；请明确哪个只是候选、哪个已经实测。
+</code></pre>
+<h2 id="section-5">8. 连续执行，但保留真正的决定点</h2>
+<p>原话：</p>
+<blockquote>
+<p>一直继续直到你觉得出现问题或需要询问我，小任务不需要一直中断</p>
+</blockquote>
+<p>解释：小任务是控制范围，不是每项都等一句“继续”。付费、公开上传、目标取舍等仍需明确决定。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">按已确认计划连续执行。普通编译和接口问题自行处理；每阶段简短汇报证据。
+需要付费、公开发布、删除数据或改变产品目标时暂停对应部分，说明具体选择，继续不依赖它的任务。
+</code></pre>
+<h2 id="section-6">9. 建立长期反馈与交接</h2>
+<p>原话：</p>
+<blockquote>
+<p>我觉得可以，我们是不是应该做一个数据库，失败了就记录下来，下次更改的时候再让你读取数据，你就知道该怎么改进工程了</p>
+</blockquote>
+<p>解释：保留成功和失败的输入标识、步骤、版本与结果，后续才能比较。记录不意味着把私人照片公开到 GitHub。</p>
+<p>可复制模板：</p>
+<pre><code class="language-text">记录这次案例的输入哈希、代码/模型版本、参数、耗时、错误、产物位置和复现步骤。
+更新唯一进度入口，区分已实现、已验证和待处理；私人素材留本地。
+</code></pre>
+<h2 id="codex">一条接手时能直接发给 Codex 的完整提示</h2>
+<pre><code class="language-text">请读 HANDOFF.md、AGENTS.md 和 docs/handoff/CODEX_HANDOVER.md。
+先核对工程与环境，按文档跑演示并记录结果，再从第一个可独立推进的未完成项继续。
+我没有开发经验，解释要用普通语言。请提出你的意见，不要默认接受我的判断。
+按小任务执行但连续推进；没有证据不能标完成。涉及画面必须自己看，不以测试数量替代效果。
+需要我决定的事项请说清原因和建议，其余范围内可逆工作自行完成。
+</code></pre>
+</section>
+  </main>
+</body>
+</html>
